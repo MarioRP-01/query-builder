@@ -11,6 +11,9 @@ import java.util.stream.Collectors;
 /**
  * Fluent builder for type-safe UPDATE statements.
  *
+ * <p>Unsupported: UPDATE with JOIN (multi-table), SET col = col + expr (arithmetic),
+ * SET col = CASE WHEN (conditional).
+ *
  * <p>{@link #build()} requires at least one WHERE condition (safety).
  * Use {@link #buildUnconditional()} for full-table updates.
  *

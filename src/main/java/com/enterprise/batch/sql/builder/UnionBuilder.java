@@ -7,6 +7,13 @@ import com.enterprise.batch.sql.validation.ExpressionValidator;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Combines multiple SELECT queries with UNION or UNION ALL.
+ * All member queries must share the same {@link ParameterBinder}.
+ * Optional ORDER BY applied to the combined result.
+ *
+ * <p>Unsupported: EXCEPT / MINUS / INTERSECT.
+ */
 public class UnionBuilder {
 
     private final ParameterBinder binder;

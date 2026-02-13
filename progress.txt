@@ -116,6 +116,67 @@ Total:               115/115
 
 ========================================================================
 
+Session: Review, fix comments, bugs, add IfPresent variants, document gaps
+=========================================================================
+
+Full review pass: fixed inaccurate comments, 3 bugs, added 6 missing IfPresent
+condition variants, collapsed duplicate dialects, documented uncovered use cases.
+
+Files modified
+--------------
+- Conditions.java             Fixed and/or Javadoc ("filters nulls, throws if none remain"),
+                              added unsupported block, added 6 IfPresent variants:
+                              neqIfPresent, gtIfPresent, ltIfPresent, likeIfPresent,
+                              startsWithIfPresent, notInIfPresent
+- SimpleCondition.java        Error msg: "Use eqIfPresent()" → "Use the IfPresent variant or isNull()"
+- SelectBuilder.java          Fixed buildSubquery() Javadoc, having() Javadoc, CTE binder warning,
+                              added unsupported block (FOR UPDATE, NULLS FIRST/LAST, window fns, etc.)
+- UpdateBuilder.java          Added unsupported block (JOIN, arithmetic SET, CASE SET)
+- MergeBuilder.java           Added unsupported block (conditional WHEN), inline comments in validate()
+- InsertBuilder.java          Inline comment on SELECT 1 FROM DUAL
+- Dialects.java               Collapsed duplicate ORACLE impl → alias for ANSI
+- ExpressionValidator.java    Bug fix: identifier regex [a-zA-Z0-9_ ]* → [a-zA-Z0-9_.]*
+                              (spaces invalid, dots needed for qualified refs), added class/inline Javadoc
+- BatchWriterFactory.java     Bug fix: added result.verify() after buildDml() (match reader)
+- QueryDebugger.java          Bug fix: null guard on param value to prevent NPE, added class Javadoc
+- BatchReaderFactory.java     Fixed afterPropertiesSet() comment
+- SchemaValidator.java        Inline comment on Oracle uppercase COLUMN_NAME
+- Column.java                 Added class Javadoc (ref vs name, aggregate helpers)
+- CompositeCondition.java     Added class Javadoc
+- BetweenCondition.java       Added class Javadoc
+- LikeCondition.java          Added class Javadoc
+- InListCondition.java        Added class Javadoc
+- NullCondition.java          Added class Javadoc
+- ColumnCondition.java        Added class Javadoc
+- SubqueryCondition.java      Added class Javadoc
+- ExistsCondition.java        Added class Javadoc
+- RawCondition.java           Added class Javadoc
+- UnionBuilder.java           Added class Javadoc + unsupported block
+- ParameterBinder.java        Added class Javadoc
+- AllGapsTest.java            Updated assertion to match new error message
+- CLAUDE.md                   Updated IfPresent list, dialect section, docs index
+- docs/README.md              Added unsupported.md link
+
+Files added
+-----------
+- docs/unsupported.md         Consolidated unsupported features + workarounds by component
+
+Bug fixes
+---------
+1. ExpressionValidator: identifier regex allowed spaces, disallowed dots
+2. BatchWriterFactory: missing verify() — reader had it, writer didn't
+3. QueryDebugger: NPE when parameter value is null
+
+Test results
+------------
+AllGapsTest:          25/25
+EdgeCaseTests:        66/66
+SpringBatchTests:      8/8
+DmlBuilderTests:      33/33
+Total:               132/132
+
+========================================================================
+
 Session: Project documentation (docs/)
 =======================================
 

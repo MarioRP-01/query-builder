@@ -4,6 +4,10 @@ import com.enterprise.batch.sql.builder.SqlResult;
 
 import java.util.Map;
 
+/**
+ * Debug utility: formats an {@link SqlResult} showing named-param SQL,
+ * positional SQL, values-inlined SQL, and parameter list with types.
+ */
 public final class QueryDebugger {
 
     private QueryDebugger() {}
@@ -22,8 +26,10 @@ public final class QueryDebugger {
         Map<String, Object> params = result.namedParameters();
         sb.append("Parameters (").append(params.size()).append("):\n");
         for (Map.Entry<String, Object> e : params.entrySet()) {
-            sb.append("  ").append(e.getKey()).append(" = ").append(e.getValue())
-                    .append(" (").append(e.getValue().getClass().getSimpleName()).append(")\n");
+            Object val = e.getValue();
+            String typeName = val != null ? val.getClass().getSimpleName() : "null";
+            sb.append("  ").append(e.getKey()).append(" = ").append(val)
+                    .append(" (").append(typeName).append(")\n");
         }
         sb.append("======================");
         return sb.toString();

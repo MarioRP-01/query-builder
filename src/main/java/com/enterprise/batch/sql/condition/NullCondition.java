@@ -3,6 +3,9 @@ package com.enterprise.batch.sql.condition;
 import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.param.ParameterBinder;
 
+/**
+ * {@code col IS [NOT] NULL}. No parameter binding needed.
+ */
 public class NullCondition implements Condition {
 
     private final Column<?> column;

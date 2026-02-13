@@ -5,6 +5,10 @@ import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.ComparisonOp;
 import com.enterprise.batch.sql.param.ParameterBinder;
 
+/**
+ * {@code col [NOT] IN (subquery)} or {@code col op (subquery)}.
+ * Subquery must share the parent's {@link ParameterBinder} for unique param names.
+ */
 public class SubqueryCondition implements Condition {
 
     private final Column<?> column;

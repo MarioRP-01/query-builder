@@ -3,6 +3,11 @@ package com.enterprise.batch.sql.condition;
 import com.enterprise.batch.sql.param.ParameterBinder;
 import com.enterprise.batch.sql.validation.ExpressionValidator;
 
+/**
+ * Escape hatch for SQL fragments not covered by typed conditions.
+ * Uses {@code ?} placeholders bound via {@link ParameterBinder}.
+ * Validated by {@link ExpressionValidator} to block injection.
+ */
 public class RawCondition implements Condition {
 
     private final String sql;

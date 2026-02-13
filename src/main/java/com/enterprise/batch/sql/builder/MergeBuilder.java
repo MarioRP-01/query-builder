@@ -10,6 +10,9 @@ import java.util.stream.Collectors;
 /**
  * Fluent builder for Oracle MERGE (upsert) statements.
  *
+ * <p>Unsupported: WHEN MATCHED AND condition THEN (conditional match),
+ * WHEN NOT MATCHED AND condition THEN INSERT.
+ *
  * <p>Produces:
  * <pre>
  * MERGE INTO target t
@@ -194,13 +197,17 @@ public class MergeBuilder {
     }
 
     private void validate() {
+        // Target table
         Objects.requireNonNull(table, "target table required — call .into(Table)");
+        // Source: DUAL or subquery
         if (dualColumns.isEmpty() && subquerySource == null) {
             throw new IllegalStateException("Source required — call .usingDual() or .usingSubquery()");
         }
+        // Match key
         if (onColumns.isEmpty()) {
             throw new IllegalStateException("ON clause required — call .on(Column...)");
         }
+        // At least one action: UPDATE, DELETE, or INSERT
         boolean hasWhen = !matchedUpdateColumns.isEmpty()
                 || !matchedSetClauses.isEmpty()
                 || matchedDelete

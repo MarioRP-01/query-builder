@@ -5,6 +5,10 @@ import com.enterprise.batch.sql.param.ParameterBinder;
 
 import java.util.Objects;
 
+/**
+ * {@code col [NOT] LIKE :pattern}. Pattern is parameterized, never inlined.
+ * NOT LIKE via {@code negated=true}.
+ */
 public class LikeCondition implements Condition {
 
     private final Column<String> column;

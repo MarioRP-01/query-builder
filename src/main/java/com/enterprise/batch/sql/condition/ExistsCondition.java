@@ -3,6 +3,9 @@ package com.enterprise.batch.sql.condition;
 import com.enterprise.batch.sql.builder.SqlResult;
 import com.enterprise.batch.sql.param.ParameterBinder;
 
+/**
+ * {@code [NOT] EXISTS (subquery)}.
+ */
 public class ExistsCondition implements Condition {
 
     private final SqlResult subquery;

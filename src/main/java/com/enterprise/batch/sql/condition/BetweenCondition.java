@@ -5,6 +5,9 @@ import com.enterprise.batch.sql.param.ParameterBinder;
 
 import java.util.Objects;
 
+/**
+ * {@code col BETWEEN :p1 AND :p2}. Null-rejecting — both bounds required.
+ */
 public class BetweenCondition implements Condition {
 
     private final Column<?> column;

@@ -356,7 +356,7 @@ public class AllGapsTest {
             eq(ORDERS.STATUS, null);
         } catch (NullPointerException e) {
             threw = true;
-            assertContains(e.getMessage(), "eqIfPresent");
+            assertContains(e.getMessage(), "IfPresent");
         }
         assertTrue(threw, "eq() with null should throw NullPointerException");
     }

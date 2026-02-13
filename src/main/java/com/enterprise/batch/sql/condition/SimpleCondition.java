@@ -16,7 +16,7 @@ public class SimpleCondition implements Condition {
         Objects.requireNonNull(column, "Column must not be null");
         if (value == null) {
             throw new NullPointerException(
-                "Value for " + column.name() + " is null. Use eqIfPresent() or isNull()");
+                "Value for " + column.name() + " is null. Use the IfPresent variant or isNull()");
         }
         this.column = column;
         this.op = op;

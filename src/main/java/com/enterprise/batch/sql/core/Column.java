@@ -1,5 +1,14 @@
 package com.enterprise.batch.sql.core;
 
+/**
+ * Typed column bound to a {@link Table}. Created via {@link Table#column(String, Class)}
+ * in the table constructor so {@link Table#as(String)} can rebind all columns.
+ *
+ * <p>{@link #ref()} returns qualified {@code alias.name} for WHERE/ON/SELECT;
+ * {@link #name()} returns unqualified name for SET/INSERT targets.
+ * Aggregate helpers ({@link #sumAs}, {@link #countAs}, etc.) produce
+ * {@code AGG(alias.col) AS label} fragments.
+ */
 public class Column<T> {
 
     private final Table table;

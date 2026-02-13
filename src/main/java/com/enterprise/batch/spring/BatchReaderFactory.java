@@ -57,8 +57,8 @@ public class BatchReaderFactory {
      * @param provider  query provider — must be stateless
      * @param rowMapper maps each ResultSet row to a domain object
      * @param jobParams job execution parameters forwarded to the provider
-     * @return fully configured reader — caller should NOT call afterPropertiesSet()
-     *         manually when used inside a Spring-managed Step
+     * @return fully configured reader — Spring calls afterPropertiesSet() automatically
+     *         in managed Steps
      */
     public <T> JdbcCursorItemReader<T> cursorReader(
             String name,

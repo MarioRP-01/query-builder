@@ -5,6 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Binds values to named parameters. {@link #bind(Object, String)} returns
+ * {@code :hint_N} (counter starts at 1) and stores the value.
+ * Thread-safe counter via {@link AtomicInteger}.
+ */
 public class ParameterBinder {
 
     private final Map<String, Object> parameters = new LinkedHashMap<>();

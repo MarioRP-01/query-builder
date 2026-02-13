@@ -7,6 +7,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * {@code col [NOT] IN (:p1, :p2, ...)}. Empty list rejected at construction.
+ */
 public class InListCondition implements Condition {
 
     private final Column<?> column;

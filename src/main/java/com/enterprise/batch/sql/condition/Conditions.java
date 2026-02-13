@@ -10,7 +10,10 @@ import java.util.Objects;
 
 /**
  * Static factory for creating {@link Condition} instances.
- * Designed to be imported statically for a clean DSL:
+ * Designed to be imported statically for a clean DSL.
+ *
+ * <p>Unsupported: endsWith() (workaround: {@code like(col, "%" + suffix)}),
+ * NOT BETWEEN, LIKE ESCAPE clause.
  *
  * <pre>{@code
  * import static com.enterprise.batch.sql.condition.Conditions.*;
@@ -142,6 +145,33 @@ public final class Conditions {
         return (values == null || values.isEmpty()) ? null : in(column, values);
     }
 
+    public static <V> Condition neqIfPresent(Column<V> column, V value) {
+        return value == null ? null : neq(column, value);
+    }
+
+    public static <V extends Comparable<? super V>> Condition gtIfPresent(Column<V> column,
+                                                                    V value) {
+        return value == null ? null : gt(column, value);
+    }
+
+    public static <V extends Comparable<? super V>> Condition ltIfPresent(Column<V> column,
+                                                                    V value) {
+        return value == null ? null : lt(column, value);
+    }
+
+    public static Condition likeIfPresent(Column<String> column, String pattern) {
+        return pattern == null ? null : like(column, pattern);
+    }
+
+    public static Condition startsWithIfPresent(Column<String> column, String value) {
+        return value == null ? null : startsWith(column, value);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <V> Condition notInIfPresent(Column<V> column, List<V> values) {
+        return (values == null || values.isEmpty()) ? null : notIn(column, values);
+    }
+
     // ==================== Column comparisons ====================
 
     public static Condition eqColumn(Column<?> left, Column<?> right) {
@@ -178,7 +208,8 @@ public final class Conditions {
     // ==================== Composite conditions (AND/OR) ====================
 
     /**
-     * Combines conditions with AND. All conditions must be non-null.
+     * Combines conditions with AND. Null conditions filtered out.
+     * Throws if none remain after filtering.
      */
     public static Condition and(Condition... conditions) {
         List<Condition> nonNull = filterNulls(conditions);
@@ -190,7 +221,8 @@ public final class Conditions {
     }
 
     /**
-     * Combines conditions with OR. All conditions must be non-null.
+     * Combines conditions with OR. Null conditions filtered out.
+     * Throws if none remain after filtering.
      */
     public static Condition or(Condition... conditions) {
         List<Condition> nonNull = filterNulls(conditions);

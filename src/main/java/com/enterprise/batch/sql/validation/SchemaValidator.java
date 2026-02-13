@@ -40,7 +40,7 @@ public class SchemaValidator {
         try (ResultSet rs = meta.getColumns(null, null, table.tableName(), null)) {
             List<String> dbColumns = new ArrayList<>();
             while (rs.next()) {
-                dbColumns.add(rs.getString("COLUMN_NAME").toLowerCase());
+                dbColumns.add(rs.getString("COLUMN_NAME").toLowerCase()); // Oracle returns uppercase
             }
             if (dbColumns.isEmpty()) {
                 errors.add("Table '" + table.tableName() + "' not found in database");

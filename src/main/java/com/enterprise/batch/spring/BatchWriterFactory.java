@@ -71,6 +71,8 @@ public class BatchWriterFactory {
      */
     public SqlResult resolveQuery(BatchDmlProvider provider,
                                   Map<String, Object> jobParams) {
-        return provider.buildDml(jobParams);
+        SqlResult result = provider.buildDml(jobParams);
+        result.verify();
+        return result;
     }
 }

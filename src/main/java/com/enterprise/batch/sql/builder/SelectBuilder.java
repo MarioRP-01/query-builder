@@ -15,6 +15,10 @@ import java.util.stream.Collectors;
  * The main entry point for building type-safe SQL queries.
  * Produces {@link SqlResult} with named parameters.
  *
+ * <p>Unsupported: FOR UPDATE / FOR UPDATE SKIP LOCKED, NULLS FIRST/LAST in ORDER BY,
+ * window functions (ROW_NUMBER, RANK, LAG, LEAD), RECURSIVE CTEs,
+ * typed HAVING on aggregates (use {@link #havingRaw}).
+ *
  * <p>Addresses all identified gaps:
  * <ul>
  *   <li>Gap #1: OR conditions via composable {@link Condition} objects</li>
@@ -128,8 +132,8 @@ public class SelectBuilder {
 
     /**
      * Adds a Common Table Expression (WITH clause).
-     * The CTE's SqlResult must have been built with the SAME ParameterBinder
-     * (via {@link #subquery(ParameterBinder)}).
+     * WARNING: CTE subquery MUST share parent binder via {@link #subquery(ParameterBinder)},
+     * otherwise parameter names will collide.
      */
     public SelectBuilder with(String cteName, SqlResult cteQuery) {
         ExpressionValidator.validateIdentifier(cteName);
@@ -265,9 +269,8 @@ public class SelectBuilder {
     }
 
     /**
-     * HAVING with a typed aggregate condition.
-     * Example: {@code having(gt(column, value))} won't work directly for aggregates,
-     * so use raw conditions: {@code havingRaw("SUM(o.amount) >= ?", 1000)}
+     * HAVING with a column-level condition (e.g. {@code having(gt(col, val))}).
+     * For aggregate expressions (COUNT/SUM), use {@link #havingRaw(String, Object)}.
      */
     public SelectBuilder having(Condition condition) {
         if (condition != null) {
@@ -388,9 +391,8 @@ public class SelectBuilder {
     }
 
     /**
-     * Builds as an intermediate result for use in subqueries, CTEs, or UNIONs.
-     * Does NOT create a new SqlResult — returns raw SQL string.
-     * Parameters are already tracked in the shared binder.
+     * Semantic alias for {@link #build()}, kept for readability in subquery/CTE/UNION contexts.
+     * Returns a full SqlResult — parameters are tracked in the shared binder.
      */
     public SqlResult buildSubquery() {
         return build();

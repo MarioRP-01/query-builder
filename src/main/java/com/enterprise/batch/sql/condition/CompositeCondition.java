@@ -5,6 +5,11 @@ import com.enterprise.batch.sql.param.ParameterBinder;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * AND/OR composite: wraps children in parentheses.
+ * {@code (child1 AND child2)} or {@code (child1 OR child2)}.
+ * Created via {@link Conditions#and}/{@link Conditions#or}.
+ */
 public class CompositeCondition implements Condition {
 
     public enum Logic { AND, OR }

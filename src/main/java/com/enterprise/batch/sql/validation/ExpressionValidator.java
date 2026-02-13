@@ -2,16 +2,23 @@ package com.enterprise.batch.sql.validation;
 
 import java.util.regex.Pattern;
 
+/**
+ * SQL injection guard for raw strings (identifiers, ON clauses, ORDER BY).
+ * Blocks DML keywords, comments, and semicolons. Values are always parameterized.
+ */
 public final class ExpressionValidator {
 
     private ExpressionValidator() {}
 
+    // Letters/underscore start, then alphanumeric/underscore/dot (for qualified refs)
     private static final Pattern IDENTIFIER_PATTERN =
-            Pattern.compile("[a-zA-Z_][a-zA-Z0-9_ ]*");
+            Pattern.compile("[a-zA-Z_][a-zA-Z0-9_.]*");
 
+    // DML/DDL keywords that should never appear in expressions
     private static final Pattern DANGEROUS_KEYWORDS = Pattern.compile(
             "(?i)\\b(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|TRUNCATE|EXEC|EXECUTE|GRANT|REVOKE)\\b");
 
+    // SQL comment markers
     private static final Pattern COMMENTS = Pattern.compile("(--|/\\*|\\*/)");
 
     /** Validates a simple identifier (table alias, CTE name, etc.) */

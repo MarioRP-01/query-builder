@@ -4,6 +4,9 @@ import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.ComparisonOp;
 import com.enterprise.batch.sql.param.ParameterBinder;
 
+/**
+ * Column-to-column comparison: {@code left.ref op right.ref}. No parameter binding.
+ */
 public class ColumnCondition implements Condition {
 
     private final Column<?> left;

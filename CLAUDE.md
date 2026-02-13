@@ -68,7 +68,7 @@ Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracl
 
 ### Key design decisions
 
-**Null semantics split**: Strict methods (`eq`, `gte`, ...) throw NPE on null value. Optional methods (`eqIfPresent`, `gteIfPresent`, ...) return `null`, which `.where()` silently filters out. This prevents accidental NULL comparisons in SQL.
+**Null semantics split**: Strict methods (`eq`, `gte`, ...) throw NPE on null value. Optional methods (`eqIfPresent`, `gteIfPresent`, `neqIfPresent`, `gtIfPresent`, `ltIfPresent`, `likeIfPresent`, `startsWithIfPresent`, `notInIfPresent`, ...) return `null`, which `.where()` silently filters out. This prevents accidental NULL comparisons in SQL.
 
 **Table aliasing via reconstruction**: `Table.as(newAlias)` creates a **new instance** with fresh `Column` objects bound to the new alias. Columns must be assigned in the constructor, never inline — otherwise `as()` won't rebind them.
 
@@ -98,7 +98,7 @@ All conditions implement `Condition.toSql(ParameterBinder)`. Composite condition
 
 ### Dialect
 
-Oracle is the default (`Dialects.ORACLE`). The `SqlDialect` interface is kept open for future database engines — implement the interface and pass via `.dialect(myDialect)`. ANSI fallback is available via `Dialects.ANSI`.
+Oracle 12c+ uses ANSI FETCH FIRST syntax. `Dialects.ORACLE` is an alias for `Dialects.ANSI` — single implementation, two names for semantic clarity. The `SqlDialect` interface is kept open for future database engines — implement the interface and pass via `.dialect(myDialect)`.
 
 ## Adding a new table
 
@@ -133,3 +133,4 @@ Full docs live in `docs/`. See `docs/README.md` for index. Key files:
 - `spring-batch.md` — providers, reader/writer factories, registries, full job example
 - `design-decisions.md` — 10 patterns, trade-offs, the 14 design gaps
 - `security.md` — parameterization, expression validation, blocked patterns
+- `unsupported.md` — features not yet covered, with workarounds

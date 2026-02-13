@@ -14,6 +14,7 @@ Type-safe SQL DSL for Oracle + Spring Batch. Generates JDBC-ready SQL with named
 | [Spring Batch Integration](spring-batch.md) | Readers, writers, providers, registries |
 | [Design Decisions](design-decisions.md) | Patterns, trade-offs, rationale |
 | [Security](security.md) | SQL injection protection, expression validation |
+| [Unsupported](unsupported.md) | Features not yet covered, with workarounds |
 
 ## Quick Example
 

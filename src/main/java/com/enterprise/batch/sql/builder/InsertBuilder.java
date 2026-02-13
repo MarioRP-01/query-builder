@@ -176,7 +176,7 @@ public class InsertBuilder {
                .append(" (").append(colNames).append(")")
                .append(" VALUES (").append(String.join(", ", placeholders)).append(")");
         }
-        sql.append(" SELECT 1 FROM DUAL");
+        sql.append(" SELECT 1 FROM DUAL"); // required by Oracle INSERT ALL syntax
         return new SqlResult(sql.toString(), binder.getParameters());
     }
 
