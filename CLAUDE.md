@@ -27,6 +27,9 @@ mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.DmlBuilder
 
 # Run order enrichment test (10 tests: read→process→DB+CSV write)
 mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.OrderEnrichmentTest"
+
+# Run arithmetic & CASE tests (22 tests: arithmetic SET, CASE expressions, SELECT refactor)
+mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.ArithmeticAndCaseTests"
 ```
 
 Tests are standalone (no JUnit). Each test class has `main()` and exits with code 1 on failure.
@@ -51,6 +54,7 @@ Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracl
 4. **`DeleteBuilder.delete()`** — fluent DELETE: `.from()` → `.where()` → `.build()` (WHERE required; `.buildUnconditional()` for full-table)
 5. **`MergeBuilder.merge()`** — Oracle MERGE: `.into()` → `.usingDual()`/`.usingSubquery()` → `.on()` → `.whenMatched*()`/`.whenNotMatchedInsert()` → `.build()`
 6. **`Conditions.*`** (static import) — composable condition DSL: `eq()`, `or()`, `and()`, `eqIfPresent()`, `exists()`, etc.
+7. **`Cases.*`** (static import) — CASE expressions: `Cases.when(condition).then(val)...orElse(val).as(alias)` (searched), `Cases.of(column).when(val).then(val)...` (simple)
 
 ### Spring Batch integration (`com.enterprise.batch.spring`)
 

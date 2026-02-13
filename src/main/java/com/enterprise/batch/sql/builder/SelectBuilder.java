@@ -5,10 +5,7 @@ import com.enterprise.batch.sql.core.*;
 import com.enterprise.batch.sql.param.ParameterBinder;
 import com.enterprise.batch.sql.validation.ExpressionValidator;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -68,7 +65,7 @@ public class SelectBuilder {
     private final List<CteClause> ctes = new ArrayList<>();
 
     // SELECT
-    private String selectClause;
+    private final List<SelectItem> selectItems = new ArrayList<>();
     private boolean distinct;
 
     // FROM
@@ -144,19 +141,34 @@ public class SelectBuilder {
     // ==================== SELECT ====================
 
     public SelectBuilder select(String... columns) {
-        this.selectClause = String.join(", ", columns);
+        selectItems.clear();
+        for (String col : columns) {
+            selectItems.add(new RawSelectItem(col));
+        }
         return this;
     }
 
     public SelectBuilder selectDistinct(String... columns) {
         this.distinct = true;
-        this.selectClause = String.join(", ", columns);
+        selectItems.clear();
+        for (String col : columns) {
+            selectItems.add(new RawSelectItem(col));
+        }
         return this;
     }
 
     public SelectBuilder selectRaw(String expression) {
         ExpressionValidator.validateExpression(expression);
-        this.selectClause = expression;
+        selectItems.clear();
+        selectItems.add(new RawSelectItem(expression));
+        return this;
+    }
+
+    /** Appends CASE or other expressions to the SELECT list (does not clear). */
+    public SelectBuilder selectExpr(Condition... expressions) {
+        for (Condition expr : expressions) {
+            selectItems.add(new ExprSelectItem(expr));
+        }
         return this;
     }
 
@@ -307,6 +319,12 @@ public class SelectBuilder {
         return this;
     }
 
+    /** ORDER BY a CASE or other expression. */
+    public SelectBuilder orderByExpr(Condition expression, SortDirection dir) {
+        orderByClauses.add(expression.toSql(binder) + " " + dir.name());
+        return this;
+    }
+
     // ==================== LIMIT / OFFSET — Gap #14 ====================
 
     public SelectBuilder limit(int count) {
@@ -340,7 +358,10 @@ public class SelectBuilder {
         // SELECT
         sql.append("SELECT ");
         if (distinct) sql.append("DISTINCT ");
-        sql.append(selectClause);
+        String rendered = selectItems.stream()
+                .map(item -> item.render(binder))
+                .collect(Collectors.joining(", "));
+        sql.append(rendered);
 
         // FROM
         if (fromClause != null) {
@@ -401,4 +422,14 @@ public class SelectBuilder {
     // ==================== Inner types ====================
 
     private record CteClause(String name, String sql) {}
+
+    private sealed interface SelectItem {
+        String render(ParameterBinder binder);
+    }
+    private record RawSelectItem(String sql) implements SelectItem {
+        @Override public String render(ParameterBinder binder) { return sql; }
+    }
+    private record ExprSelectItem(Condition expr) implements SelectItem {
+        @Override public String render(ParameterBinder binder) { return expr.toSql(binder); }
+    }
 }

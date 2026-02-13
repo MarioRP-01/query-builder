@@ -1,7 +1,9 @@
 package com.enterprise.batch.sql.builder;
 
+import com.enterprise.batch.sql.core.ArithmeticOp;
 import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.Table;
+import com.enterprise.batch.sql.expression.CaseExpression;
 import com.enterprise.batch.sql.param.ParameterBinder;
 
 import java.util.*;
@@ -51,6 +53,8 @@ public class MergeBuilder {
     // WHEN MATCHED
     private final List<Column<?>> matchedUpdateColumns = new ArrayList<>();
     private final List<MatchedSetEntry<?>> matchedSetClauses = new ArrayList<>();
+    private final List<MatchedArithmeticEntry<?>> matchedArithmeticClauses = new ArrayList<>();
+    private final List<MatchedCaseEntry> matchedCaseClauses = new ArrayList<>();
     private boolean matchedDelete;
 
     // WHEN NOT MATCHED
@@ -137,6 +141,50 @@ public class MergeBuilder {
         return this;
     }
 
+    // ==================== Arithmetic WHEN MATCHED SET ====================
+
+    /** WHEN MATCHED THEN UPDATE SET col = col + value. */
+    public <T extends Number> MergeBuilder whenMatchedSetAdd(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        matchedArithmeticClauses.add(new MatchedArithmeticEntry<>(column, ArithmeticOp.ADD, value));
+        return this;
+    }
+
+    /** WHEN MATCHED THEN UPDATE SET col = col - value. */
+    public <T extends Number> MergeBuilder whenMatchedSetSubtract(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        matchedArithmeticClauses.add(new MatchedArithmeticEntry<>(column, ArithmeticOp.SUBTRACT, value));
+        return this;
+    }
+
+    /** WHEN MATCHED THEN UPDATE SET col = col * value. */
+    public <T extends Number> MergeBuilder whenMatchedSetMultiply(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        matchedArithmeticClauses.add(new MatchedArithmeticEntry<>(column, ArithmeticOp.MULTIPLY, value));
+        return this;
+    }
+
+    /** WHEN MATCHED THEN UPDATE SET col = col / value. */
+    public <T extends Number> MergeBuilder whenMatchedSetDivide(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        matchedArithmeticClauses.add(new MatchedArithmeticEntry<>(column, ArithmeticOp.DIVIDE, value));
+        return this;
+    }
+
+    // ==================== CASE WHEN MATCHED SET ====================
+
+    /** WHEN MATCHED THEN UPDATE SET col = CASE WHEN ... END. */
+    public MergeBuilder whenMatchedSetCase(Column<?> column, CaseExpression caseExpr) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(caseExpr, "caseExpr");
+        matchedCaseClauses.add(new MatchedCaseEntry(column, caseExpr));
+        return this;
+    }
+
     public SqlResult build() {
         validate();
         StringBuilder sql = new StringBuilder();
@@ -163,9 +211,11 @@ public class MergeBuilder {
         sql.append(" ON (").append(onClause).append(")");
 
         // WHEN MATCHED
-        if (matchedDelete && matchedUpdateColumns.isEmpty() && matchedSetClauses.isEmpty()) {
+        boolean hasMatchedSets = !matchedUpdateColumns.isEmpty() || !matchedSetClauses.isEmpty()
+                || !matchedArithmeticClauses.isEmpty() || !matchedCaseClauses.isEmpty();
+        if (matchedDelete && !hasMatchedSets) {
             sql.append(" WHEN MATCHED THEN DELETE");
-        } else if (!matchedUpdateColumns.isEmpty() || !matchedSetClauses.isEmpty()) {
+        } else if (hasMatchedSets) {
             sql.append(" WHEN MATCHED THEN UPDATE SET ");
             List<String> sets = new ArrayList<>();
             for (Column<?> col : matchedUpdateColumns) {
@@ -173,6 +223,13 @@ public class MergeBuilder {
             }
             for (MatchedSetEntry<?> entry : matchedSetClauses) {
                 sets.add(entry.column.ref() + " = " + binder.bind(entry.value, entry.column.name()));
+            }
+            for (MatchedArithmeticEntry<?> entry : matchedArithmeticClauses) {
+                sets.add(entry.column.ref() + " = " + entry.column.ref() + " "
+                        + entry.op.sql() + " " + binder.bind(entry.value, entry.column.name()));
+            }
+            for (MatchedCaseEntry entry : matchedCaseClauses) {
+                sets.add(entry.column.ref() + " = " + entry.caseExpr.toSql(binder));
             }
             sql.append(String.join(", ", sets));
         }
@@ -210,6 +267,8 @@ public class MergeBuilder {
         // At least one action: UPDATE, DELETE, or INSERT
         boolean hasWhen = !matchedUpdateColumns.isEmpty()
                 || !matchedSetClauses.isEmpty()
+                || !matchedArithmeticClauses.isEmpty()
+                || !matchedCaseClauses.isEmpty()
                 || matchedDelete
                 || !notMatchedInsertColumns.isEmpty();
         if (!hasWhen) {
@@ -228,4 +287,6 @@ public class MergeBuilder {
     }
 
     private record MatchedSetEntry<T>(Column<T> column, T value) {}
+    private record MatchedArithmeticEntry<T>(Column<T> column, ArithmeticOp op, T value) {}
+    private record MatchedCaseEntry(Column<?> column, CaseExpression caseExpr) {}
 }

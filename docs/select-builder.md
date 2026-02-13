@@ -18,6 +18,7 @@
 .select(ORDERS.AMOUNT.sumAs("total"))   // SUM(o.amount) AS total
 .selectDistinct(ORDERS.STATUS.ref())    // SELECT DISTINCT
 .selectRaw("NVL(o.amount, 0)")          // raw expression (validated)
+.selectExpr(caseExpr)                   // CASE expression (appends, does not clear)
 ```
 
 ### FROM Clause
@@ -76,6 +77,7 @@ See [Conditions](conditions.md) for the full predicate DSL.
 ```java
 .orderBy(ORDERS.CREATED_DATE, SortDirection.DESC)
 .orderByExpr("NVL(o.amount, 0)", SortDirection.ASC)   // raw (validated)
+.orderByExpr(caseExpr, SortDirection.ASC)              // CASE expression
 ```
 
 ### Pagination
@@ -214,6 +216,47 @@ SelectBuilder.subquery(shared)
     .where(inSubquery(ORDERS.CUSTOMER_ID, activeCustomers))
     .build();
 ```
+
+### CASE Expressions
+
+```java
+import static com.enterprise.batch.sql.expression.Cases.*;
+
+// Searched CASE in SELECT
+CaseExpression tier = Cases.when(gt(ORDERS.AMOUNT, 1000)).then("High")
+    .when(gt(ORDERS.AMOUNT, 100)).then("Medium")
+    .orElse("Low")
+    .as("tier");
+
+SelectBuilder.query()
+    .select(ORDERS.ID.ref())
+    .selectExpr(tier)
+    .from(ORDERS)
+    .build();
+// SELECT o.id, CASE WHEN o.amount > :amount_1 THEN :case_2
+//   WHEN o.amount > :amount_3 THEN :case_4 ELSE :case_5 END AS tier
+// FROM orders o
+
+// Simple CASE
+SimpleCaseExpression label = Cases.of(ORDERS.STATUS)
+    .when("A").then("Active")
+    .when("C").then("Closed")
+    .orElse("Unknown")
+    .as("label");
+
+// CASE in ORDER BY (custom sort priority)
+CaseExpression priority = Cases.when(eq(ORDERS.STATUS, "URGENT")).then(1)
+    .when(eq(ORDERS.STATUS, "NORMAL")).then(2)
+    .orElse(3);
+
+SelectBuilder.query()
+    .select(ORDERS.ID.ref())
+    .from(ORDERS)
+    .orderByExpr(priority, SortDirection.ASC)
+    .build();
+```
+
+`selectExpr()` **appends** to the SELECT list (unlike `select()` which clears it), enabling mixed column + expression selects.
 
 ### Aggregates
 

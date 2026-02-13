@@ -121,6 +121,39 @@ SqlResult result = UpdateBuilder.update()
 .setSubquery(ORDERS.AMOUNT, subResult)      // SET amount = (SELECT ...)
 ```
 
+### Arithmetic SET
+
+```java
+.setAdd(ORDERS.AMOUNT, BigDecimal.TEN)      // SET amount = amount + :amount_1
+.setSubtract(ORDERS.AMOUNT, BigDecimal.ONE) // SET amount = amount - :amount_1
+.setMultiply(ORDERS.AMOUNT, BigDecimal.TWO) // SET amount = amount * :amount_1
+.setDivide(ORDERS.AMOUNT, BigDecimal.TWO)   // SET amount = amount / :amount_1
+.setArithmetic(ORDERS.AMOUNT, ArithmeticOp.ADD, val)  // general form
+```
+
+Column-to-column arithmetic (no parameter binding):
+
+```java
+.setColumnExpr(ORDERS.AMOUNT, ORDERS.QTY, ArithmeticOp.MULTIPLY, ORDERS.PRICE)
+// SET amount = qty * price
+```
+
+All arithmetic methods are bounded to `Column<T extends Number>` for type safety.
+
+### CASE in SET
+
+```java
+CaseExpression tier = Cases.when(gt(ORDERS.AMOUNT, 1000)).then("HIGH")
+    .orElse("LOW");
+
+UpdateBuilder.update()
+    .table(ORDERS)
+    .setCase(ORDERS.CATEGORY, tier)
+    .where(eq(ORDERS.ID, orderId))
+    .build();
+// SET category = CASE WHEN o.amount > :amount_1 THEN :case_2 ELSE :case_3 END
+```
+
 ### WHERE Safety Guard
 
 `build()` **requires** at least one WHERE condition. This prevents accidental full-table updates:
@@ -237,6 +270,23 @@ SqlResult merge = MergeBuilder.merge()
 
 ```java
 .whenMatchedSet(ORDERS.STATUS, "PROCESSED")   // SET o.status = :status_N
+```
+
+### WHEN MATCHED with Arithmetic
+
+```java
+.whenMatchedSetAdd(ORDERS.AMOUNT, BigDecimal.TEN)       // SET o.amount = o.amount + :amount_N
+.whenMatchedSetSubtract(ORDERS.AMOUNT, BigDecimal.ONE)   // SET o.amount = o.amount - :amount_N
+.whenMatchedSetMultiply(ORDERS.AMOUNT, BigDecimal.TWO)   // SET o.amount = o.amount * :amount_N
+.whenMatchedSetDivide(ORDERS.AMOUNT, BigDecimal.TWO)     // SET o.amount = o.amount / :amount_N
+```
+
+### WHEN MATCHED with CASE
+
+```java
+CaseExpression tier = Cases.when(gt(ORDERS.AMOUNT, 1000)).then("HIGH").orElse("LOW");
+.whenMatchedSetCase(ORDERS.CATEGORY, tier)
+// SET o.category = CASE WHEN o.amount > :amount_N THEN :case_N ELSE :case_N END
 ```
 
 ### ColumnValue Type Safety

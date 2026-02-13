@@ -210,3 +210,68 @@ Discoveries
 
 3. Sealed interfaces used for UpdateBuilder.SetClause variants — enables
    exhaustive pattern matching for ValueSetClause/NullSetClause/SubquerySetClause.
+
+========================================================================
+
+Session: Arithmetic SET + CASE expressions
+============================================
+
+Added arithmetic SET expressions (col = col + val) and CASE expressions
+(searched + simple) across all builders. Refactored SelectBuilder's select
+clause from String to List<SelectItem> for expression support.
+
+Files added
+-----------
+- ArithmeticOp.java             Enum: ADD(+), SUBTRACT(-), MULTIPLY(*), DIVIDE(/)
+- CaseExpression.java           Searched CASE: CASE WHEN cond THEN val ... END
+- SimpleCaseExpression.java     Simple CASE: CASE col WHEN val THEN val ... END
+- Cases.java                    Fluent builders: Cases.when()/Cases.of() with step chaining
+- ArithmeticAndCaseTests.java   22 standalone tests
+
+Files modified
+--------------
+- UpdateBuilder.java            + setAdd/setSubtract/setMultiply/setDivide/setArithmetic/setColumnExpr/setCase,
+                                + ArithmeticSetClause/ColumnArithmeticSetClause/CaseSetClause sealed records,
+                                + toTemplateSql() default on SetClause, buildTemplate() uses it,
+                                removed "unsupported arithmetic/CASE" from Javadoc
+- MergeBuilder.java             + whenMatchedSetAdd/Subtract/Multiply/Divide/Case,
+                                + MatchedArithmeticEntry/MatchedCaseEntry records,
+                                updated build() WHEN MATCHED + validate() hasWhen check
+- SelectBuilder.java            Refactored selectClause String → List<SelectItem> sealed interface,
+                                + selectExpr(Condition...) appends expressions,
+                                + orderByExpr(Condition, SortDirection) overload,
+                                + RawSelectItem/ExprSelectItem records
+- docs/unsupported.md           Removed arithmetic SET + CASE entries
+- docs/dml-builders.md          + arithmetic SET, CASE in SET, MERGE arithmetic/CASE examples
+- docs/select-builder.md        + selectExpr(), CASE examples, ORDER BY with CASE
+- CLAUDE.md                     + Cases.* entry point, arithmetic & CASE test command
+
+Design decisions
+----------------
+1. Arithmetic SET methods bounded to Column<T extends Number> for type safety.
+   setColumnExpr uses Column<?> (no bound) since column-to-column arithmetic
+   has no value parameter to constrain.
+
+2. toTemplateSql() default on SetClause returns col = :col (existing behavior).
+   ArithmeticSetClause overrides: col = col + :col. ColumnArithmeticSetClause:
+   col = left + right. CaseSetClause throws UnsupportedOperationException.
+
+3. CASE classes implement Condition (reuse toSql(ParameterBinder) contract).
+   CaseExpression.as() returns new instance with alias — use alias for SELECT,
+   omit for SET/ORDER BY.
+
+4. SelectBuilder List refactor: select()/selectDistinct()/selectRaw() clear list,
+   selectExpr() appends. Preserves existing overwrite semantics while enabling
+   mixed column + expression selects.
+
+5. orderByExpr(Condition, SortDirection) renders CASE eagerly via binder —
+   consistent with join() which also renders conditions immediately.
+
+Test results
+------------
+ArithmeticAndCaseTests: 22/22  ← NEW
+AllGapsTest:            25/25
+EdgeCaseTests:          66/66
+SpringBatchTests:        8/8
+DmlBuilderTests:        33/33
+Total:                 154/154

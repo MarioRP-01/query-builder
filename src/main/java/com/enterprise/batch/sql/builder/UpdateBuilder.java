@@ -1,8 +1,10 @@
 package com.enterprise.batch.sql.builder;
 
 import com.enterprise.batch.sql.condition.Condition;
+import com.enterprise.batch.sql.core.ArithmeticOp;
 import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.Table;
+import com.enterprise.batch.sql.expression.CaseExpression;
 import com.enterprise.batch.sql.param.ParameterBinder;
 
 import java.util.*;
@@ -11,8 +13,7 @@ import java.util.stream.Collectors;
 /**
  * Fluent builder for type-safe UPDATE statements.
  *
- * <p>Unsupported: UPDATE with JOIN (multi-table), SET col = col + expr (arithmetic),
- * SET col = CASE WHEN (conditional).
+ * <p>Unsupported: UPDATE with JOIN (multi-table).
  *
  * <p>{@link #build()} requires at least one WHERE condition (safety).
  * Use {@link #buildUnconditional()} for full-table updates.
@@ -100,6 +101,69 @@ public class UpdateBuilder {
         return this;
     }
 
+    // ==================== Arithmetic SET ====================
+
+    /** SET column = column + value. */
+    public <T extends Number> UpdateBuilder setAdd(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new ArithmeticSetClause(column, ArithmeticOp.ADD, value));
+        return this;
+    }
+
+    /** SET column = column - value. */
+    public <T extends Number> UpdateBuilder setSubtract(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new ArithmeticSetClause(column, ArithmeticOp.SUBTRACT, value));
+        return this;
+    }
+
+    /** SET column = column * value. */
+    public <T extends Number> UpdateBuilder setMultiply(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new ArithmeticSetClause(column, ArithmeticOp.MULTIPLY, value));
+        return this;
+    }
+
+    /** SET column = column / value. */
+    public <T extends Number> UpdateBuilder setDivide(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new ArithmeticSetClause(column, ArithmeticOp.DIVIDE, value));
+        return this;
+    }
+
+    /** SET column = column op value (general form). */
+    public <T extends Number> UpdateBuilder setArithmetic(Column<T> column, ArithmeticOp op, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(op, "op");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new ArithmeticSetClause(column, op, value));
+        return this;
+    }
+
+    /** SET target = left op right (column-to-column arithmetic). */
+    public UpdateBuilder setColumnExpr(Column<?> target, Column<?> left, ArithmeticOp op, Column<?> right) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(left, "left");
+        Objects.requireNonNull(op, "op");
+        Objects.requireNonNull(right, "right");
+        setClauses.add(new ColumnArithmeticSetClause(target, left, op, right));
+        return this;
+    }
+
+    // ==================== CASE SET ====================
+
+    /** SET column = CASE WHEN ... END. */
+    public UpdateBuilder setCase(Column<?> column, CaseExpression caseExpr) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(caseExpr, "caseExpr");
+        setClauses.add(new CaseSetClause(column, caseExpr));
+        return this;
+    }
+
     /**
      * WHERE conditions. Nulls are silently filtered (same as SelectBuilder).
      */
@@ -147,7 +211,7 @@ public class UpdateBuilder {
             throw new IllegalStateException("No SET clauses");
         }
         String setClause = setClauses.stream()
-                .map(c -> c.column().name() + " = :" + c.column().name())
+                .map(SetClause::toTemplateSql)
                 .collect(Collectors.joining(", "));
         String sql = "UPDATE " + table.declaration() + " SET " + setClause;
         return new SqlResult(sql, Map.of());
@@ -194,6 +258,9 @@ public class UpdateBuilder {
     private sealed interface SetClause {
         Column<?> column();
         String toSql(ParameterBinder binder);
+        default String toTemplateSql() {
+            return column().name() + " = :" + column().name();
+        }
     }
 
     private record ValueSetClause(Column<?> column, Object value) implements SetClause {
@@ -214,6 +281,41 @@ public class UpdateBuilder {
         @Override
         public String toSql(ParameterBinder binder) {
             return column.name() + " = (" + subquery.sql() + ")";
+        }
+    }
+
+    private record ArithmeticSetClause(Column<?> column, ArithmeticOp op, Object value) implements SetClause {
+        @Override
+        public String toSql(ParameterBinder binder) {
+            return column.name() + " = " + column.name() + " " + op.sql() + " "
+                    + binder.bind(value, column.name());
+        }
+        @Override
+        public String toTemplateSql() {
+            return column.name() + " = " + column.name() + " " + op.sql() + " :" + column.name();
+        }
+    }
+
+    private record ColumnArithmeticSetClause(Column<?> column, Column<?> left,
+            ArithmeticOp op, Column<?> right) implements SetClause {
+        @Override
+        public String toSql(ParameterBinder binder) {
+            return column.name() + " = " + left.name() + " " + op.sql() + " " + right.name();
+        }
+        @Override
+        public String toTemplateSql() {
+            return column.name() + " = " + left.name() + " " + op.sql() + " " + right.name();
+        }
+    }
+
+    private record CaseSetClause(Column<?> column, CaseExpression caseExpr) implements SetClause {
+        @Override
+        public String toSql(ParameterBinder binder) {
+            return column.name() + " = " + caseExpr.toSql(binder);
+        }
+        @Override
+        public String toTemplateSql() {
+            throw new UnsupportedOperationException("CASE in SET not supported in template mode");
         }
     }
 }
