@@ -90,7 +90,7 @@ public class SelectBuilder {
     // Private constructor — use query() factory
     private SelectBuilder(ParameterBinder binder) {
         this.binder = binder;
-        this.dialect = Dialects.ANSI;
+        this.dialect = Dialects.ORACLE;
     }
 
     // ==================== Factory ====================

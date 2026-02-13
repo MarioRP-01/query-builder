@@ -28,27 +28,4 @@ public final class Dialects {
         }
     };
 
-    public static final SqlDialect POSTGRESQL = new SqlDialect() {
-        @Override public String limit(int count) {
-            return "LIMIT " + count;
-        }
-        @Override public String offset(int skip) {
-            return "OFFSET " + skip;
-        }
-        @Override public String limitOffset(int count, int skip) {
-            return "LIMIT " + count + " OFFSET " + skip;
-        }
-    };
-
-    public static final SqlDialect MYSQL = new SqlDialect() {
-        @Override public String limit(int count) {
-            return "LIMIT " + count;
-        }
-        @Override public String offset(int skip) {
-            return "OFFSET " + skip;
-        }
-        @Override public String limitOffset(int count, int skip) {
-            return "LIMIT " + count + " OFFSET " + skip;
-        }
-    };
 }

@@ -80,8 +80,7 @@ public class AllGapsTest {
 
         // Gap #12: Dialect differences
         test("Gap 12: Oracle dialect LIMIT/OFFSET", this::testOracleDialect);
-        test("Gap 12: PostgreSQL dialect LIMIT/OFFSET", this::testPostgresDialect);
-        test("Gap 12: MySQL dialect LIMIT/OFFSET", this::testMySqlDialect);
+        test("Gap 12: ANSI dialect LIMIT/OFFSET", this::testAnsiDialect);
 
         // Gap #13: Debug logging
         test("Gap 13: Debug string generation", this::testDebugString);
@@ -446,28 +445,16 @@ public class AllGapsTest {
         assertContains(result.sql(), "OFFSET 50 ROWS FETCH NEXT 100 ROWS ONLY");
     }
 
-    void testPostgresDialect() {
+    void testAnsiDialect() {
         SqlResult result = SelectBuilder.query()
-                .dialect(Dialects.POSTGRESQL)
+                .dialect(Dialects.ANSI)
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .limit(100)
                 .offset(50)
                 .build();
 
-        assertContains(result.sql(), "LIMIT 100 OFFSET 50");
-    }
-
-    void testMySqlDialect() {
-        SqlResult result = SelectBuilder.query()
-                .dialect(Dialects.MYSQL)
-                .select(ORDERS.ID.ref())
-                .from(ORDERS)
-                .limit(100)
-                .offset(50)
-                .build();
-
-        assertContains(result.sql(), "LIMIT 100 OFFSET 50");
+        assertContains(result.sql(), "OFFSET 50 ROWS FETCH NEXT 100 ROWS ONLY");
     }
 
     // ==================== Gap #13: Debug logging ====================

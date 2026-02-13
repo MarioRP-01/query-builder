@@ -6,7 +6,6 @@ import com.enterprise.batch.sql.builder.UnionBuilder;
 import com.enterprise.batch.sql.core.*;
 import com.enterprise.batch.sql.debug.QueryDebugger;
 import com.enterprise.batch.sql.param.ParameterBinder;
-import com.enterprise.batch.spring.*;
 import com.enterprise.batch.sql.validation.ExpressionValidator;
 import com.enterprise.batch.example.tables.CustomerTable;
 import com.enterprise.batch.example.tables.OrderTable;
@@ -82,7 +81,6 @@ public class EdgeCaseTests {
         // Dialect edge cases
         test("ANSI limit only", this::testAnsiLimitOnly);
         test("ANSI offset only", this::testAnsiOffsetOnly);
-        test("PostgreSQL offset only", this::testPostgresOffsetOnly);
 
         // Column/table features
         test("Column ref produces alias.name", this::testColumnRef);
@@ -122,10 +120,6 @@ public class EdgeCaseTests {
         // Thread safety: concurrent builder usage
         test("Concurrent builds produce isolated results", this::testConcurrentBuilds);
 
-        // BatchQueryProvider / Registry
-        test("BatchReaderFactory invokes provider and verifies", this::testBatchReaderFactory);
-        test("QueryProviderRegistry get unknown throws", this::testRegistryUnknownThrows);
-        test("QueryProviderRegistry roundtrip", this::testRegistryRoundtrip);
 
         // IN list condition
         test("IN list with multiple values", this::testInListMultipleValues);
@@ -360,12 +354,6 @@ public class EdgeCaseTests {
         assertContains(r.sql(), "OFFSET 5 ROWS");
     }
 
-    void testPostgresOffsetOnly() {
-        SqlResult r = SelectBuilder.query()
-                .dialect(Dialects.POSTGRESQL)
-                .select(ORDERS.ID.ref()).from(ORDERS).offset(5).build();
-        assertContains(r.sql(), "OFFSET 5");
-    }
 
     // ==================== Column/table ====================
 
@@ -651,35 +639,6 @@ public class EdgeCaseTests {
         }
     }
 
-    // ==================== Spring integration ====================
-
-    void testBatchReaderFactory() {
-        BatchQueryProvider provider = params -> SelectBuilder.query()
-                .select(ORDERS.ID.ref())
-                .from(ORDERS)
-                .where(eqIfPresent(ORDERS.STATUS, (String) params.get("status")))
-                .build();
-
-        BatchReaderFactory factory = new BatchReaderFactory();
-        SqlResult r = factory.createQuery("testReader", provider,
-                Map.of("status", "PENDING"));
-        assertContains(r.sql(), "o.status =");
-    }
-
-    void testRegistryUnknownThrows() {
-        QueryProviderRegistry registry = new QueryProviderRegistry();
-        assertThrows(IllegalArgumentException.class, () -> registry.get("nonexistent"));
-    }
-
-    void testRegistryRoundtrip() {
-        QueryProviderRegistry registry = new QueryProviderRegistry();
-        BatchQueryProvider provider = params -> SelectBuilder.query()
-                .select(ORDERS.ID.ref()).from(ORDERS).build();
-        registry.register("orders", provider);
-        BatchQueryProvider retrieved = registry.get("orders");
-        assertTrue(retrieved == provider, "Should return same provider instance");
-        assertEquals(1, registry.all().size());
-    }
 
     // ==================== IN list ====================
 

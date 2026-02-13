@@ -4,29 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Test
 
-No Maven/Gradle — pure `javac`. Java 17+.
+Maven + Java 17+. Oracle is the target database; Spring Batch is the runtime framework.
 
 ```bash
-# Compile everything
-find src -name "*.java" | xargs javac -d out
+# Compile everything (requires Maven)
+mvn compile
 
-# Run gap tests (26 tests covering all 14 design gaps)
-java -cp out com.enterprise.batch.sql.AllGapsTest
+# Run gap tests (25 tests covering all 14 design gaps)
+mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.AllGapsTest"
 
-# Run edge-case tests (70 tests: nulls, injection, concurrency, etc.)
-java -cp out com.enterprise.batch.sql.EdgeCaseTests
+# Run edge-case tests (66 tests: nulls, injection, concurrency, etc.)
+mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.EdgeCaseTests"
+
+# Run Spring Batch integration tests (8 tests: provider, factory, registry)
+mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringBatchTests"
 ```
 
 Tests are standalone (no JUnit). Each test class has `main()` and exits with code 1 on failure.
 
+Core-only build (no Maven/Spring required — compiles SQL DSL + tests only):
+```bash
+find src -name "*.java" -not -path "*/spring/BatchReaderFactory.java" -not -path "*/spring/SpringBatchQueryConfig.java" | xargs javac -d out
+java -cp out com.enterprise.batch.sql.AllGapsTest
+java -cp out com.enterprise.batch.sql.EdgeCaseTests
+java -cp out com.enterprise.batch.sql.SpringBatchTests
+```
+
 ## Architecture
 
-Type-safe SQL query DSL producing JDBC-ready SQL with named parameters. Zero external dependencies in core; Spring Batch integration layer is optional.
+Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracle + Spring Batch.
 
 ### Two entry points
 
 1. **`SelectBuilder.query()`** — fluent builder: `.select()` → `.from()` → `.join()` → `.where()` → `.orderBy()` → `.build()` → `SqlResult`
 2. **`Conditions.*`** (static import) — composable condition DSL: `eq()`, `or()`, `and()`, `eqIfPresent()`, `exists()`, etc.
+
+### Spring Batch integration (`com.enterprise.batch.spring`)
+
+- **`BatchQueryProvider`** — `@FunctionalInterface` returning `SqlResult` from job params. One per query type, registered as a Spring bean.
+- **`BatchReaderFactory`** — creates `JdbcCursorItemReader<T>` from a provider + `RowMapper` + `DataSource`. Converts named params to positional via `SqlResult.toPositional()`.
+- **`QueryProviderRegistry`** — named lookup for providers when a job has many readers.
+- **`SpringBatchQueryConfig`** — `@Configuration` that wires `BatchReaderFactory` + registry as beans.
 
 ### Key design decisions
 
@@ -50,9 +68,9 @@ All conditions implement `Condition.toSql(ParameterBinder)`. Composite condition
 
 `ExpressionValidator` checks all raw strings (identifiers, ON clauses, ORDER BY expressions) — blocks DML keywords (`DROP`, `DELETE`, `INSERT`, `UPDATE`, `ALTER`, `CREATE`, `TRUNCATE`, `EXEC`), comments (`--`, `/* */`), and semicolons. Values are always parameterized, never inlined into SQL.
 
-### Dialect portability
+### Dialect
 
-`SqlDialect` interface with ANSI (default), Oracle, PostgreSQL, MySQL implementations. Only affects LIMIT/OFFSET syntax. Set via `.dialect(Dialects.POSTGRESQL)`.
+Oracle is the default (`Dialects.ORACLE`). The `SqlDialect` interface is kept open for future database engines — implement the interface and pass via `.dialect(myDialect)`. ANSI fallback is available via `Dialects.ANSI`.
 
 ## Adding a new table
 

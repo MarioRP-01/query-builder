@@ -5,8 +5,22 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Simple registry for BatchQueryProviders.
- * In a Spring context, providers would be auto-discovered via component scanning.
+ * Named registry for {@link BatchQueryProvider} instances.
+ *
+ * <p>In a Spring context, declare as a bean and register providers
+ * by logical name:
+ * <pre>{@code
+ * @Bean
+ * public QueryProviderRegistry queryProviderRegistry() {
+ *     QueryProviderRegistry registry = new QueryProviderRegistry();
+ *     registry.register("pendingOrders", pendingOrdersProvider());
+ *     registry.register("overduePayments", overduePaymentsProvider());
+ *     return registry;
+ * }
+ * }</pre>
+ *
+ * <p>Then inject the registry where needed to look up providers by name,
+ * which is common in batch jobs with many readers.
  */
 public class QueryProviderRegistry {
 
