@@ -18,6 +18,12 @@ mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.EdgeCaseTests"
 
 # Run Spring Batch integration tests (8 tests: provider, factory, registry)
 mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringBatchTests"
+
+# Run Spring context test (6 tests: boot, beans, job execution)
+mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringContextTest"
+
+# Run order enrichment test (10 tests: read→process→DB+CSV write)
+mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.OrderEnrichmentTest"
 ```
 
 Tests are standalone (no JUnit). Each test class has `main()` and exits with code 1 on failure.

@@ -1,55 +1,73 @@
-Session: Spring Boot context + batch job end-to-end
-====================================================
+Session: Order enrichment batch job (read → process → DB + CSV)
+================================================================
 
 Summary
 -------
-Added full Spring Boot 3.2.3 application that boots a real Spring context,
-wires all SQL DSL integration beans, and runs a batch job end-to-end against
-H2 in Oracle compatibility mode. The job reads 3 PENDING orders using the
-type-safe DSL, joins with customers, and logs results.
+Added a full read-process-write batch job that reads PENDING orders via
+3-way DSL join (orders+customers+products), enriches with tax/discount/priority
+calculations, then writes results to both a database table (order_summaries)
+and a CSV file (output/order_summary.csv) using CompositeItemWriter.
 
 Files added
 -----------
-- BatchApplication.java          @SpringBootApplication entry point
-- ExampleBatchJobConfig.java     2 providers, registry wiring, Job+Step+Reader
-- OrderDto.java                  Record for RowMapper output
-- application.yml                H2 Oracle mode, batch schema init
-- schema.sql                     4 tables matching existing Table definitions
-- data.sql                       Sample data (5 orders, 3 customers, 3 products, 3 payments)
-- SpringContextTest.java         6 integration tests (context, beans, job exec, read count)
+- OrderDetailDto.java          Record for reader output (order+customer+product fields)
+- EnrichedOrderDto.java        Record for processor output (computed tax/discount/priority)
+- OrderEnrichmentJobConfig.java Full job: provider, reader, processor, 2 writers, composite, step, job
+- OrderEnrichmentTest.java     10 integration tests (job exec, DB rows, math, CSV content)
 
 Files modified
 --------------
-- pom.xml                        spring-boot-starter-parent 3.2.3, starter-batch, H2, boot plugin
+- schema.sql                   Added order_summaries table
+- application.yml              Added spring.batch.job.name for multi-job support
+- SpringContextTest.java       Fixed for 2-job context (bean-by-name lookups, registry size=3)
+- CLAUDE.md                    Added test commands for context + enrichment tests
+
+Pipeline
+--------
+1. READER: JdbcCursorItemReader via BatchReaderFactory + DSL
+   Query: SELECT o.id, o.amount, o.status, o.created_date,
+          c.name AS customer_name, c.tier AS customer_tier,
+          pr.name AS product_name, pr.category AS product_category
+   FROM orders o
+   INNER JOIN customers c ON o.customer_id = c.id
+   INNER JOIN products pr ON o.product_id = pr.id
+   WHERE o.status = :hint_0
+   ORDER BY o.amount DESC
+
+2. PROCESSOR: ItemProcessor<OrderDetailDto, EnrichedOrderDto>
+   - tax = amount * 10%
+   - discount = amount * tierRate (GOLD=15%, SILVER=10%, else 0%)
+   - finalAmount = amount + tax - discount
+   - priority = amount >= 1000 ? HIGH : NORMAL
+
+3. WRITERS (CompositeItemWriter):
+   a) JdbcBatchItemWriter → INSERT INTO order_summaries
+   b) FlatFileItemWriter  → output/order_summary.csv (header + comma-delimited)
 
 Discoveries
 -----------
-1. Boot 3.2 auto-config (no @EnableBatchProcessing) is sufficient — provides
-   JobRepository, JobLauncher, PlatformTransactionManager, and auto-runs jobs.
-   @EnableBatchProcessing actually DISABLES Boot auto-config in 3.x.
+1. Boot 3.2 with multiple Job beans requires spring.batch.job.name property,
+   even when spring.batch.job.enabled=false — JobLauncherApplicationRunner's
+   afterPropertiesSet() enforces this unconditionally.
 
-2. H2 MODE=Oracle handles standard SQL from the DSL without issues. Column
-   aliasing, JOINs, parameterized WHERE all work identically to Oracle.
+2. CompositeItemWriter in Spring Batch 5.1 (Boot 3.2.3) extends
+   AbstractItemStreamItemWriter and properly delegates open()/close()
+   to ItemStream delegates. No manual .stream() registration needed.
 
-3. JDBC ResultSet column label lookup is case-insensitive, so the DSL's
-   lowercase column names (o.id, o.amount) match H2's uppercase labels.
+3. Records with JdbcBatchItemWriter: BeanPropertyItemSqlParameterSourceProvider
+   doesn't work with records (no getter convention). Use
+   ItemPreparedStatementSetter with positional params instead.
 
-4. Test commands need `test-compile` not `compile` for src/test/java classes.
-   The CLAUDE.md docs say `mvn compile exec:java` but that only compiles main
-   sources — test classes require `mvn test-compile exec:java`.
+4. FlatFileItemWriter: BeanWrapperFieldExtractor has same record issue.
+   Custom lineAggregator with direct record accessor calls is cleaner.
 
-5. SpringBatchQueryConfig (existing) is auto-scanned and provides
-   BatchReaderFactory + empty QueryProviderRegistry. ExampleBatchJobConfig
-   populates the registry via @Autowired method injection, which runs during
-   config class init — guaranteed before @Bean methods that depend on it.
-
-6. JdbcCursorItemReader is safe for multiple job runs as a singleton bean.
-   open()/close() manage cursor lifecycle per step execution; bean config
-   (SQL, DataSource, PreparedStatementSetter) is immutable after creation.
+5. JdbcBatchItemWriterBuilder.build() calls afterPropertiesSet() internally,
+   so the writer is fully initialized when returned from @Bean method.
 
 Test results
 ------------
-AllGapsTest:       25/25 passed
-EdgeCaseTests:     66/66 passed
-SpringBatchTests:   8/8  passed
-SpringContextTest:  6/6  passed (NEW)
+AllGapsTest:          25/25 passed
+EdgeCaseTests:        66/66 passed
+SpringBatchTests:      8/8  passed
+SpringContextTest:     6/6  passed
+OrderEnrichmentTest:  10/10 passed (NEW)

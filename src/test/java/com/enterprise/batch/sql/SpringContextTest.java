@@ -48,15 +48,19 @@ public class SpringContextTest {
                     "Missing pendingOrders provider");
                 assertTrue(reg.all().containsKey("highValueCustomers"),
                     "Missing highValueCustomers provider");
-                assertEquals(2, reg.all().size());
+                assertTrue(reg.all().containsKey("orderDetails"),
+                    "Missing orderDetails provider");
+                assertEquals(3, reg.all().size());
             });
 
-            test("Job bean exists", () ->
-                assertNotNull(ctx.getBean(Job.class)));
+            test("Job beans exist", () -> {
+                assertNotNull(ctx.getBean("processOrdersJob", Job.class));
+                assertNotNull(ctx.getBean("orderEnrichmentJob", Job.class));
+            });
 
             test("Job launches and reads 3 PENDING orders", () -> {
                 JobLauncher launcher = ctx.getBean(JobLauncher.class);
-                Job job = ctx.getBean(Job.class);
+                Job job = ctx.getBean("processOrdersJob", Job.class);
                 JobExecution exec = launcher.run(job,
                     new JobParametersBuilder()
                         .addLong("run.id", System.currentTimeMillis())
@@ -69,7 +73,7 @@ public class SpringContextTest {
 
             test("Second run with different params succeeds", () -> {
                 JobLauncher launcher = ctx.getBean(JobLauncher.class);
-                Job job = ctx.getBean(Job.class);
+                Job job = ctx.getBean("processOrdersJob", Job.class);
                 JobExecution exec = launcher.run(job,
                     new JobParametersBuilder()
                         .addLong("run.id", System.currentTimeMillis() + 1)

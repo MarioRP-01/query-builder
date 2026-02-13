@@ -33,3 +33,17 @@ CREATE TABLE payments (
     payment_date DATE,
     CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id)
 );
+
+CREATE TABLE order_summaries (
+    order_id BIGINT PRIMARY KEY,
+    customer_name VARCHAR(100),
+    customer_tier VARCHAR(20),
+    product_name VARCHAR(100),
+    original_amount DECIMAL(10,2),
+    tax_amount DECIMAL(10,2),
+    discount_amount DECIMAL(10,2),
+    final_amount DECIMAL(10,2),
+    priority VARCHAR(20),
+    processed_date DATE,
+    CONSTRAINT fk_summaries_order FOREIGN KEY (order_id) REFERENCES orders(id)
+);

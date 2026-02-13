@@ -7,3 +7,4 @@ spring:
       initialize-schema: always
     job:
       enabled: true
+      name: processOrdersJob
