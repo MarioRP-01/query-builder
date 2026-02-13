@@ -1,0 +1,55 @@
+Session: Spring Boot context + batch job end-to-end
+====================================================
+
+Summary
+-------
+Added full Spring Boot 3.2.3 application that boots a real Spring context,
+wires all SQL DSL integration beans, and runs a batch job end-to-end against
+H2 in Oracle compatibility mode. The job reads 3 PENDING orders using the
+type-safe DSL, joins with customers, and logs results.
+
+Files added
+-----------
+- BatchApplication.java          @SpringBootApplication entry point
+- ExampleBatchJobConfig.java     2 providers, registry wiring, Job+Step+Reader
+- OrderDto.java                  Record for RowMapper output
+- application.yml                H2 Oracle mode, batch schema init
+- schema.sql                     4 tables matching existing Table definitions
+- data.sql                       Sample data (5 orders, 3 customers, 3 products, 3 payments)
+- SpringContextTest.java         6 integration tests (context, beans, job exec, read count)
+
+Files modified
+--------------
+- pom.xml                        spring-boot-starter-parent 3.2.3, starter-batch, H2, boot plugin
+
+Discoveries
+-----------
+1. Boot 3.2 auto-config (no @EnableBatchProcessing) is sufficient — provides
+   JobRepository, JobLauncher, PlatformTransactionManager, and auto-runs jobs.
+   @EnableBatchProcessing actually DISABLES Boot auto-config in 3.x.
+
+2. H2 MODE=Oracle handles standard SQL from the DSL without issues. Column
+   aliasing, JOINs, parameterized WHERE all work identically to Oracle.
+
+3. JDBC ResultSet column label lookup is case-insensitive, so the DSL's
+   lowercase column names (o.id, o.amount) match H2's uppercase labels.
+
+4. Test commands need `test-compile` not `compile` for src/test/java classes.
+   The CLAUDE.md docs say `mvn compile exec:java` but that only compiles main
+   sources — test classes require `mvn test-compile exec:java`.
+
+5. SpringBatchQueryConfig (existing) is auto-scanned and provides
+   BatchReaderFactory + empty QueryProviderRegistry. ExampleBatchJobConfig
+   populates the registry via @Autowired method injection, which runs during
+   config class init — guaranteed before @Bean methods that depend on it.
+
+6. JdbcCursorItemReader is safe for multiple job runs as a singleton bean.
+   open()/close() manage cursor lifecycle per step execution; bean config
+   (SQL, DataSource, PreparedStatementSetter) is immutable after creation.
+
+Test results
+------------
+AllGapsTest:       25/25 passed
+EdgeCaseTests:     66/66 passed
+SpringBatchTests:   8/8  passed
+SpringContextTest:  6/6  passed (NEW)
