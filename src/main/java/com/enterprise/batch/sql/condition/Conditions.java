@@ -12,8 +12,7 @@ import java.util.Objects;
  * Static factory for creating {@link Condition} instances.
  * Designed to be imported statically for a clean DSL.
  *
- * <p>Unsupported: endsWith() (workaround: {@code like(col, "%" + suffix)}),
- * NOT BETWEEN, LIKE ESCAPE clause.
+ * <p>Unsupported: LIKE ESCAPE clause.
  *
  * <pre>{@code
  * import static com.enterprise.batch.sql.condition.Conditions.*;
@@ -94,6 +93,11 @@ public final class Conditions {
         return new LikeCondition(column, value + "%", false);
     }
 
+    public static Condition endsWith(Column<String> column, String value) {
+        Objects.requireNonNull(value);
+        return new LikeCondition(column, "%" + value, false);
+    }
+
     public static <V> Condition in(Column<V> column, List<V> values) {
         return new InListCondition(column, values, false);
     }
@@ -131,9 +135,19 @@ public final class Conditions {
         return value == null ? null : lte(column, value);
     }
 
+    public static <V extends Comparable<? super V>> Condition notBetween(Column<V> column,
+                                                                  V from, V to) {
+        return new BetweenCondition(column, from, to, true);
+    }
+
     public static <V extends Comparable<? super V>> Condition betweenIfPresent(
             Column<V> column, V from, V to) {
         return (from == null || to == null) ? null : between(column, from, to);
+    }
+
+    public static <V extends Comparable<? super V>> Condition notBetweenIfPresent(
+            Column<V> column, V from, V to) {
+        return (from == null || to == null) ? null : notBetween(column, from, to);
     }
 
     public static Condition containsIfPresent(Column<String> column, String value) {
@@ -165,6 +179,10 @@ public final class Conditions {
 
     public static Condition startsWithIfPresent(Column<String> column, String value) {
         return value == null ? null : startsWith(column, value);
+    }
+
+    public static Condition endsWithIfPresent(Column<String> column, String value) {
+        return value == null ? null : endsWith(column, value);
     }
 
     @SuppressWarnings("unchecked")

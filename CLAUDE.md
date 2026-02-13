@@ -30,6 +30,9 @@ mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.OrderEnric
 
 # Run arithmetic & CASE tests (22 tests: arithmetic SET, CASE expressions, SELECT refactor)
 mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.ArithmeticAndCaseTests"
+
+# Run set ops & conditions tests (23 tests: EXCEPT, INTERSECT, notBetween, endsWith, FOR UPDATE, NULLS FIRST/LAST)
+mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SetOpsAndConditionsTests"
 ```
 
 Tests are standalone (no JUnit). Each test class has `main()` and exits with code 1 on failure.

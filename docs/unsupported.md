@@ -6,8 +6,8 @@ Consolidated list of SQL features not yet covered by the DSL, grouped by compone
 
 | Feature | Workaround |
 |---------|-----------|
-| `FOR UPDATE` / `FOR UPDATE SKIP LOCKED` | Use `selectRaw()` with raw SQL suffix, or native query |
-| `NULLS FIRST` / `NULLS LAST` in ORDER BY | Use `orderByExpr("col ASC NULLS FIRST", ASC)` (validate manually) |
+| ~~`FOR UPDATE` / `FOR UPDATE SKIP LOCKED`~~ | **Now supported** via `forUpdate()`, `forUpdateNoWait()`, `forUpdateSkipLocked()` |
+| ~~`NULLS FIRST` / `NULLS LAST` in ORDER BY~~ | **Now supported** via `orderBy(col, dir, NullsOrder.NULLS_FIRST)` |
 | Window functions (`ROW_NUMBER`, `RANK`, `LAG`, `LEAD`) | Use `selectRaw()` for the window expression |
 | ~~`CASE WHEN ... THEN ... ELSE ... END`~~ | **Now supported** via `selectExpr()` + `Cases.when()` / `Cases.of()` |
 | `RECURSIVE` CTEs | Use `with()` + raw recursive SQL via subquery builder |
@@ -17,8 +17,8 @@ Consolidated list of SQL features not yet covered by the DSL, grouped by compone
 
 | Feature | Workaround |
 |---------|-----------|
-| `EXCEPT` / `MINUS` | Use `NOT EXISTS` subquery condition |
-| `INTERSECT` | Use `EXISTS` subquery condition |
+| ~~`EXCEPT` / `MINUS`~~ | **Now supported** via `UnionBuilder.except()` |
+| ~~`INTERSECT`~~ | **Now supported** via `UnionBuilder.intersect()` |
 
 ## UpdateBuilder
 
@@ -37,6 +37,6 @@ Consolidated list of SQL features not yet covered by the DSL, grouped by compone
 
 | Feature | Workaround |
 |---------|-----------|
-| `endsWith(col, suffix)` | `like(col, "%" + suffix)` |
-| `NOT BETWEEN` | `or(lt(col, low), gt(col, high))` |
+| ~~`endsWith(col, suffix)`~~ | **Now supported** via `endsWith()` / `endsWithIfPresent()` |
+| ~~`NOT BETWEEN`~~ | **Now supported** via `notBetween()` / `notBetweenIfPresent()` |
 | `LIKE ESCAPE` clause | `raw("col LIKE ? ESCAPE '\\'", pattern)` |

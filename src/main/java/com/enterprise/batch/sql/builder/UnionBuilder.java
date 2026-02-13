@@ -8,13 +8,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Combines multiple SELECT queries with UNION or UNION ALL.
+ * Combines multiple SELECT queries with UNION, UNION ALL, EXCEPT, or INTERSECT.
  * All member queries must share the same {@link ParameterBinder}.
  * Optional ORDER BY applied to the combined result.
- *
- * <p>Unsupported: EXCEPT / MINUS / INTERSECT.
  */
 public class UnionBuilder {
+
+    /** Set operation types for combining SELECT queries. */
+    public enum SetOperator {
+        UNION("UNION"),
+        UNION_ALL("UNION ALL"),
+        EXCEPT("EXCEPT"),
+        INTERSECT("INTERSECT");
+
+        private final String sql;
+
+        SetOperator(String sql) { this.sql = sql; }
+
+        public String sql() { return sql; }
+    }
 
     private final ParameterBinder binder;
     private final List<UnionPart> parts = new ArrayList<>();
@@ -29,12 +41,22 @@ public class UnionBuilder {
     }
 
     public UnionBuilder union(SqlResult query) {
-        parts.add(new UnionPart(query.sql(), false));
+        parts.add(new UnionPart(query.sql(), SetOperator.UNION));
         return this;
     }
 
     public UnionBuilder unionAll(SqlResult query) {
-        parts.add(new UnionPart(query.sql(), true));
+        parts.add(new UnionPart(query.sql(), SetOperator.UNION_ALL));
+        return this;
+    }
+
+    public UnionBuilder except(SqlResult query) {
+        parts.add(new UnionPart(query.sql(), SetOperator.EXCEPT));
+        return this;
+    }
+
+    public UnionBuilder intersect(SqlResult query) {
+        parts.add(new UnionPart(query.sql(), SetOperator.INTERSECT));
         return this;
     }
 
@@ -48,7 +70,7 @@ public class UnionBuilder {
         StringBuilder sql = new StringBuilder();
         for (int i = 0; i < parts.size(); i++) {
             if (i > 0) {
-                sql.append(parts.get(i).all ? " UNION ALL " : " UNION ");
+                sql.append(" ").append(parts.get(i).op.sql()).append(" ");
             }
             sql.append(parts.get(i).sql);
         }
@@ -58,5 +80,5 @@ public class UnionBuilder {
         return new SqlResult(sql.toString(), binder.getParameters());
     }
 
-    private record UnionPart(String sql, boolean all) {}
+    private record UnionPart(String sql, SetOperator op) {}
 }

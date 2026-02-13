@@ -275,3 +275,44 @@ EdgeCaseTests:          66/66
 SpringBatchTests:        8/8
 DmlBuilderTests:        33/33
 Total:                 154/154
+
+========================================================================
+
+Session: 5 unsupported features (EXCEPT/INTERSECT, notBetween, endsWith, FOR UPDATE, NULLS FIRST/LAST)
+========================================================================================================
+
+Closed 5 common gaps from unsupported.md.
+
+Files added
+-----------
+- NullsOrder.java                 Enum: NULLS_FIRST, NULLS_LAST with sql() method
+- SetOpsAndConditionsTests.java   23 standalone tests
+
+Files modified
+--------------
+- UnionBuilder.java               + SetOperator enum (UNION/UNION_ALL/EXCEPT/INTERSECT),
+                                  + except()/intersect() methods, refactored UnionPart to use enum,
+                                  removed "Unsupported: EXCEPT/MINUS/INTERSECT" from Javadoc
+- BetweenCondition.java           + negated flag, 2-arg ctor preserved (default false),
+                                  toSql() emits NOT BETWEEN when negated
+- Conditions.java                 + notBetween(), notBetweenIfPresent(),
+                                  + endsWith(), endsWithIfPresent(),
+                                  removed unsupported block for endsWith/NOT BETWEEN
+- SelectBuilder.java              + forUpdate(), forUpdateNoWait(), forUpdateSkipLocked(),
+                                  + orderBy(col, dir, NullsOrder) overload,
+                                  + orderByExpr(String, dir, NullsOrder) overload,
+                                  + orderByExpr(Condition, dir, NullsOrder) overload,
+                                  FOR UPDATE appended after LIMIT/OFFSET in build(),
+                                  removed "Unsupported: FOR UPDATE, NULLS FIRST/LAST" from Javadoc
+- docs/unsupported.md             5 rows struck through (FOR UPDATE, NULLS, EXCEPT, INTERSECT, endsWith, NOT BETWEEN)
+- CLAUDE.md                       + SetOpsAndConditionsTests run command
+
+Test results
+------------
+SetOpsAndConditionsTests: 23/23  ← NEW
+ArithmeticAndCaseTests:  22/22
+AllGapsTest:             25/25
+EdgeCaseTests:           66/66
+SpringBatchTests:         8/8
+DmlBuilderTests:         33/33
+Total:                  177/177

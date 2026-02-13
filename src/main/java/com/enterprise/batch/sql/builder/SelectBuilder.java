@@ -4,6 +4,7 @@ import com.enterprise.batch.sql.condition.Condition;
 import com.enterprise.batch.sql.core.*;
 import com.enterprise.batch.sql.param.ParameterBinder;
 import com.enterprise.batch.sql.validation.ExpressionValidator;
+import com.enterprise.batch.sql.core.NullsOrder;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -12,8 +13,7 @@ import java.util.stream.Collectors;
  * The main entry point for building type-safe SQL queries.
  * Produces {@link SqlResult} with named parameters.
  *
- * <p>Unsupported: FOR UPDATE / FOR UPDATE SKIP LOCKED, NULLS FIRST/LAST in ORDER BY,
- * window functions (ROW_NUMBER, RANK, LAG, LEAD), RECURSIVE CTEs,
+ * <p>Unsupported: window functions (ROW_NUMBER, RANK, LAG, LEAD), RECURSIVE CTEs,
  * typed HAVING on aggregates (use {@link #havingRaw}).
  *
  * <p>Addresses all identified gaps:
@@ -87,6 +87,9 @@ public class SelectBuilder {
     // LIMIT / OFFSET — Gap #14
     private Integer limitValue;
     private Integer offsetValue;
+
+    // FOR UPDATE
+    private String forUpdateClause;
 
     // Private constructor — use query() factory
     private SelectBuilder(ParameterBinder binder) {
@@ -313,15 +316,31 @@ public class SelectBuilder {
         return this;
     }
 
+    public SelectBuilder orderBy(Column<?> column, SortDirection dir, NullsOrder nulls) {
+        orderByClauses.add(column.ref() + " " + dir.name() + " " + nulls.sql());
+        return this;
+    }
+
     public SelectBuilder orderByExpr(String expression, SortDirection dir) {
         ExpressionValidator.validateExpression(expression);
         orderByClauses.add(expression + " " + dir.name());
         return this;
     }
 
+    public SelectBuilder orderByExpr(String expression, SortDirection dir, NullsOrder nulls) {
+        ExpressionValidator.validateExpression(expression);
+        orderByClauses.add(expression + " " + dir.name() + " " + nulls.sql());
+        return this;
+    }
+
     /** ORDER BY a CASE or other expression. */
     public SelectBuilder orderByExpr(Condition expression, SortDirection dir) {
         orderByClauses.add(expression.toSql(binder) + " " + dir.name());
+        return this;
+    }
+
+    public SelectBuilder orderByExpr(Condition expression, SortDirection dir, NullsOrder nulls) {
+        orderByClauses.add(expression.toSql(binder) + " " + dir.name() + " " + nulls.sql());
         return this;
     }
 
@@ -334,6 +353,23 @@ public class SelectBuilder {
 
     public SelectBuilder offset(int skip) {
         this.offsetValue = skip;
+        return this;
+    }
+
+    // ==================== FOR UPDATE ====================
+
+    public SelectBuilder forUpdate() {
+        this.forUpdateClause = "FOR UPDATE";
+        return this;
+    }
+
+    public SelectBuilder forUpdateNoWait() {
+        this.forUpdateClause = "FOR UPDATE NOWAIT";
+        return this;
+    }
+
+    public SelectBuilder forUpdateSkipLocked() {
+        this.forUpdateClause = "FOR UPDATE SKIP LOCKED";
         return this;
     }
 
@@ -406,6 +442,11 @@ public class SelectBuilder {
             sql.append(" ").append(dialect.limit(limitValue));
         } else if (offsetValue != null) {
             sql.append(" ").append(dialect.offset(offsetValue));
+        }
+
+        // FOR UPDATE (Oracle places FOR UPDATE last)
+        if (forUpdateClause != null) {
+            sql.append(" ").append(forUpdateClause);
         }
 
         return new SqlResult(sql.toString(), binder.getParameters());
