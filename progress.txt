@@ -113,3 +113,39 @@ SpringBatchTests:      8/8
 SpringContextTest:     6/6
 OrderEnrichmentTest:  10/10  ← NEW
 Total:               115/115
+
+========================================================================
+
+Session: Project documentation (docs/)
+=======================================
+
+Created comprehensive documentation in docs/ directory, distributed across
+8 files by topic.
+
+Files added
+-----------
+- docs/README.md            Index, quick example, build commands
+- docs/architecture.md      Package structure, component diagrams, data flow, core abstractions
+- docs/getting-started.md   Table definitions, first SELECT/INSERT/UPDATE/DELETE, result usage, debugging
+- docs/select-builder.md    Full SELECT API: JOINs, CTEs, UNIONs, subqueries, pagination, aggregates
+- docs/dml-builders.md      INSERT (SET/columnar/multi-row/INSERT FROM), UPDATE, DELETE, MERGE
+- docs/conditions.md        Strict vs optional, all condition types, composition, subqueries, generics
+- docs/spring-batch.md      Providers, reader/writer factories, registries, complete job example
+- docs/design-decisions.md  10 patterns, trade-offs, 14 design gaps table
+- docs/security.md          Parameterization, expression validation, blocked patterns, recommendations
+
+Files modified
+--------------
+- CLAUDE.md                 + Documentation section with docs/ index
+
+Discoveries
+-----------
+1. Project has 53 source files total (20 core DSL, 4 Spring integration,
+   5 examples, 6 test classes, plus validation/debug utilities).
+
+2. 148 standalone tests across 6 test classes, all passing. Tests cover
+   14 design gaps, edge cases (nulls/injection/concurrency), Spring Batch
+   integration, Spring context, DML builders, and order enrichment pipeline.
+
+3. Sealed interfaces used for UpdateBuilder.SetClause variants — enables
+   exhaustive pattern matching for ValueSetClause/NullSetClause/SubquerySetClause.

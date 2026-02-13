@@ -120,3 +120,16 @@ public final class FooTable extends Table {
 ## Adding a new condition type
 
 Implement `Condition`, call `binder.bind(value, hint)` for each parameter in `toSql()`, add a static factory method in `Conditions`.
+
+## Documentation
+
+Full docs live in `docs/`. See `docs/README.md` for index. Key files:
+
+- `architecture.md` — package structure, component diagrams, data flow
+- `getting-started.md` — table definitions, first queries, result usage
+- `select-builder.md` — SELECT API: JOINs, CTEs, UNIONs, subqueries, pagination
+- `dml-builders.md` — INSERT, UPDATE, DELETE, MERGE reference
+- `conditions.md` — strict vs optional, all condition types, composition, generics
+- `spring-batch.md` — providers, reader/writer factories, registries, full job example
+- `design-decisions.md` — 10 patterns, trade-offs, the 14 design gaps
+- `security.md` — parameterization, expression validation, blocked patterns
