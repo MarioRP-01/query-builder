@@ -39,4 +39,14 @@ public class SpringBatchQueryConfig {
     public QueryProviderRegistry queryProviderRegistry() {
         return new QueryProviderRegistry();
     }
+
+    @Bean
+    public BatchWriterFactory batchWriterFactory(DataSource dataSource) {
+        return new BatchWriterFactory(dataSource);
+    }
+
+    @Bean
+    public DmlProviderRegistry dmlProviderRegistry() {
+        return new DmlProviderRegistry();
+    }
 }

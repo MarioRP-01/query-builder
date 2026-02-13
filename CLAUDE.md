@@ -22,6 +22,9 @@ mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringBatchTest
 # Run Spring context test (6 tests: boot, beans, job execution)
 mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringContextTest"
 
+# Run DML builder tests (33 tests: INSERT, UPDATE, DELETE, MERGE, Spring registry)
+mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.DmlBuilderTests"
+
 # Run order enrichment test (10 tests: read→process→DB+CSV write)
 mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.OrderEnrichmentTest"
 ```
@@ -30,7 +33,7 @@ Tests are standalone (no JUnit). Each test class has `main()` and exits with cod
 
 Core-only build (no Maven/Spring required — compiles SQL DSL + tests only):
 ```bash
-find src -name "*.java" -not -path "*/spring/BatchReaderFactory.java" -not -path "*/spring/SpringBatchQueryConfig.java" | xargs javac -d out
+find src -name "*.java" -not -path "*/spring/BatchReaderFactory.java" -not -path "*/spring/BatchWriterFactory.java" -not -path "*/spring/SpringBatchQueryConfig.java" | xargs javac -d out
 java -cp out com.enterprise.batch.sql.AllGapsTest
 java -cp out com.enterprise.batch.sql.EdgeCaseTests
 java -cp out com.enterprise.batch.sql.SpringBatchTests
@@ -40,17 +43,28 @@ java -cp out com.enterprise.batch.sql.SpringBatchTests
 
 Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracle + Spring Batch.
 
-### Two entry points
+### Entry points
 
-1. **`SelectBuilder.query()`** — fluent builder: `.select()` → `.from()` → `.join()` → `.where()` → `.orderBy()` → `.build()` → `SqlResult`
-2. **`Conditions.*`** (static import) — composable condition DSL: `eq()`, `or()`, `and()`, `eqIfPresent()`, `exists()`, etc.
+1. **`SelectBuilder.query()`** — fluent SELECT: `.select()` → `.from()` → `.join()` → `.where()` → `.orderBy()` → `.build()` → `SqlResult`
+2. **`InsertBuilder.insert()`** — fluent INSERT: `.into()` → `.set()`/`.columns().values()` → `.build()` / `.buildTemplate()`
+3. **`UpdateBuilder.update()`** — fluent UPDATE: `.table()` → `.set()` → `.where()` → `.build()` (WHERE required; `.buildUnconditional()` for full-table)
+4. **`DeleteBuilder.delete()`** — fluent DELETE: `.from()` → `.where()` → `.build()` (WHERE required; `.buildUnconditional()` for full-table)
+5. **`MergeBuilder.merge()`** — Oracle MERGE: `.into()` → `.usingDual()`/`.usingSubquery()` → `.on()` → `.whenMatched*()`/`.whenNotMatchedInsert()` → `.build()`
+6. **`Conditions.*`** (static import) — composable condition DSL: `eq()`, `or()`, `and()`, `eqIfPresent()`, `exists()`, etc.
 
 ### Spring Batch integration (`com.enterprise.batch.spring`)
 
+**Read side:**
 - **`BatchQueryProvider`** — `@FunctionalInterface` returning `SqlResult` from job params. One per query type, registered as a Spring bean.
 - **`BatchReaderFactory`** — creates `JdbcCursorItemReader<T>` from a provider + `RowMapper` + `DataSource`. Converts named params to positional via `SqlResult.toPositional()`.
 - **`QueryProviderRegistry`** — named lookup for providers when a job has many readers.
-- **`SpringBatchQueryConfig`** — `@Configuration` that wires `BatchReaderFactory` + registry as beans.
+
+**Write side:**
+- **`BatchDmlProvider`** — `@FunctionalInterface` returning `SqlResult` from job params. Same contract as `BatchQueryProvider` but for DML.
+- **`BatchWriterFactory`** — creates `JdbcBatchItemWriter<T>` from a provider + `ItemSqlParameterSourceProvider` + `DataSource`. Uses named params from `buildTemplate()`.
+- **`DmlProviderRegistry`** — named lookup for DML providers (same pattern as `QueryProviderRegistry`).
+
+- **`SpringBatchQueryConfig`** — `@Configuration` that wires all four factories/registries as beans.
 
 ### Key design decisions
 
@@ -60,7 +74,15 @@ Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracl
 
 **Shared ParameterBinder for subqueries**: `SelectBuilder.query()` creates an isolated binder. `SelectBuilder.subquery(binder)` shares the parent's binder so parameter names (`:hint_N`) stay globally unique across CTEs, UNIONs, and correlated subqueries.
 
-**Thread safety contract**: `BatchQueryProvider.buildQuery()` must create a fresh `SelectBuilder` on every call. Never reuse builder instances.
+**Thread safety contract**: `BatchQueryProvider.buildQuery()` and `BatchDmlProvider.buildDml()` must create a fresh builder on every call. Never reuse builder instances.
+
+**DML SET uses unqualified names**: `column.name()` in SET clauses (DML targets one table). WHERE reuses `Condition.toSql()` which calls `column.ref()` (qualified), matching Oracle's `UPDATE t alias SET col = :v WHERE alias.col = :v`.
+
+**`buildTemplate()` for batch writing**: Produces `:column_name` placeholders (no `_N` suffix) with empty param map. `ItemSqlParameterSourceProvider` fills values per item at runtime.
+
+**WHERE safety guard**: `UpdateBuilder.build()` and `DeleteBuilder.build()` require at least one WHERE condition. Use `buildUnconditional()` to explicitly opt into full-table DML.
+
+**`ColumnValue<T>` record**: `MergeBuilder.ColumnValue<T>(Column<T>, T)` preserves type safety and insertion order for `usingDual()`.
 
 ### Generic bounds
 

@@ -1,73 +1,115 @@
-Session: Order enrichment batch job (read → process → DB + CSV)
-================================================================
+Session: DML builders + Spring Batch writer integration
+=========================================================
 
-Summary
--------
-Added a full read-process-write batch job that reads PENDING orders via
-3-way DSL join (orders+customers+products), enriches with tax/discount/priority
-calculations, then writes results to both a database table (order_summaries)
-and a CSV file (output/order_summary.csv) using CompositeItemWriter.
+Added type-safe INSERT, UPDATE, DELETE, MERGE builders + Spring Batch writer
+integration, completing the write side to match the existing SELECT DSL.
 
 Files added
 -----------
-- OrderDetailDto.java          Record for reader output (order+customer+product fields)
-- EnrichedOrderDto.java        Record for processor output (computed tax/discount/priority)
-- OrderEnrichmentJobConfig.java Full job: provider, reader, processor, 2 writers, composite, step, job
-- OrderEnrichmentTest.java     10 integration tests (job exec, DB rows, math, CSV content)
+- InsertBuilder.java         single/multi-row, set() API, insertFrom, returning, buildTemplate
+- UpdateBuilder.java         set/setNull/setIfPresent/setSubquery, WHERE guard, returning, buildTemplate
+- DeleteBuilder.java         WHERE guard, buildUnconditional, returning
+- MergeBuilder.java          Oracle MERGE: DUAL/subquery source, multi-key ON, matched update/delete/set, not-matched insert
+- BatchDmlProvider.java      @FunctionalInterface for DML (mirrors BatchQueryProvider)
+- BatchWriterFactory.java    creates JdbcBatchItemWriter via JdbcBatchItemWriterBuilder
+- DmlProviderRegistry.java   named lookup (mirrors QueryProviderRegistry)
+- DmlBuilderTests.java       33 standalone tests
 
 Files modified
 --------------
-- schema.sql                   Added order_summaries table
-- application.yml              Added spring.batch.job.name for multi-job support
-- SpringContextTest.java       Fixed for 2-job context (bean-by-name lookups, registry size=3)
-- CLAUDE.md                    Added test commands for context + enrichment tests
+- SpringBatchQueryConfig.java  + batchWriterFactory + dmlProviderRegistry beans
+- CLAUDE.md                    + DML entry points, write-side Spring docs, new design decisions
 
-Pipeline
---------
-1. READER: JdbcCursorItemReader via BatchReaderFactory + DSL
-   Query: SELECT o.id, o.amount, o.status, o.created_date,
-          c.name AS customer_name, c.tier AS customer_tier,
-          pr.name AS product_name, pr.category AS product_category
-   FROM orders o
-   INNER JOIN customers c ON o.customer_id = c.id
-   INNER JOIN products pr ON o.product_id = pr.id
-   WHERE o.status = :hint_0
-   ORDER BY o.amount DESC
+Design decisions
+----------------
+1. SET uses column.name() (unqualified); WHERE uses column.ref() (alias-qualified).
+   Oracle: UPDATE orders o SET amount = :v WHERE o.id = :v
 
-2. PROCESSOR: ItemProcessor<OrderDetailDto, EnrichedOrderDto>
-   - tax = amount * 10%
-   - discount = amount * tierRate (GOLD=15%, SILVER=10%, else 0%)
-   - finalAmount = amount + tax - discount
-   - priority = amount >= 1000 ? HIGH : NORMAL
+2. build() on Update/Delete requires WHERE (safety). buildUnconditional() opts out.
 
-3. WRITERS (CompositeItemWriter):
-   a) JdbcBatchItemWriter → INSERT INTO order_summaries
-   b) FlatFileItemWriter  → output/order_summary.csv (header + comma-delimited)
+3. buildTemplate() emits :col_name (no _N suffix), empty param map — for
+   Spring Batch ItemSqlParameterSourceProvider per-item binding.
+
+4. Multi-row INSERT uses Oracle INSERT ALL INTO ... SELECT 1 FROM DUAL.
+
+5. MergeBuilder.ColumnValue<T> record preserves type safety in usingDual().
+
+6. RETURNING clause: Oracle RETURNING col INTO :col. Included in build(), not buildTemplate().
 
 Discoveries
 -----------
-1. Boot 3.2 with multiple Job beans requires spring.batch.job.name property,
-   even when spring.batch.job.enabled=false — JobLauncherApplicationRunner's
-   afterPropertiesSet() enforces this unconditionally.
+1. ItemSqlParameterSourceProvider lives in org.springframework.batch.item.database,
+   NOT org.springframework.jdbc.core.namedparam. Spring Batch moved it.
 
-2. CompositeItemWriter in Spring Batch 5.1 (Boot 3.2.3) extends
-   AbstractItemStreamItemWriter and properly delegates open()/close()
-   to ItemStream delegates. No manual .stream() registration needed.
+2. sealed interfaces (Java 17) work well for internal SET clause variants
+   (ValueSetClause, NullSetClause, SubquerySetClause) — exhaustive pattern matching.
 
-3. Records with JdbcBatchItemWriter: BeanPropertyItemSqlParameterSourceProvider
-   doesn't work with records (no getter convention). Use
-   ItemPreparedStatementSetter with positional params instead.
-
-4. FlatFileItemWriter: BeanWrapperFieldExtractor has same record issue.
-   Custom lineAggregator with direct record accessor calls is cleaner.
-
-5. JdbcBatchItemWriterBuilder.build() calls afterPropertiesSet() internally,
-   so the writer is fully initialized when returned from @Bean method.
+3. JdbcBatchItemWriterBuilder handles named params natively — no manual
+   toPositional() conversion needed (unlike reader side).
 
 Test results
 ------------
-AllGapsTest:          25/25 passed
-EdgeCaseTests:        66/66 passed
-SpringBatchTests:      8/8  passed
-SpringContextTest:     6/6  passed
-OrderEnrichmentTest:  10/10 passed (NEW)
+AllGapsTest:          25/25
+EdgeCaseTests:        66/66
+SpringBatchTests:      8/8
+SpringContextTest:     6/6
+OrderEnrichmentTest:  10/10
+DmlBuilderTests:      33/33  ← NEW
+Total:               148/148
+
+========================================================================
+
+Session: Order enrichment batch job (read → process → DB + CSV)
+================================================================
+
+Added read-process-write batch job: reads PENDING orders via 3-way DSL join
+(orders+customers+products), enriches with tax/discount/priority, writes to
+both order_summaries DB table and output/order_summary.csv via CompositeItemWriter.
+
+Files added
+-----------
+- OrderDetailDto.java            Reader output record (order+customer+product)
+- EnrichedOrderDto.java          Processor output record (tax/discount/priority)
+- OrderEnrichmentJobConfig.java  Full job config: provider, reader, processor, 2 writers, step, job
+- OrderEnrichmentTest.java       10 integration tests
+
+Files modified
+--------------
+- schema.sql           + order_summaries table
+- application.yml      + spring.batch.job.name (multi-job requirement)
+- SpringContextTest.java  Bean-by-name lookups, registry size 2→3
+- CLAUDE.md            + test commands for context + enrichment tests
+
+Pipeline
+--------
+Reader  → JdbcCursorItemReader via DSL (3-way join, WHERE status=PENDING, ORDER BY amount DESC)
+Processor → tax=10%, discount=GOLD 15%/SILVER 10%, finalAmount=amount+tax-discount, priority=HIGH if ≥1000
+Writers → CompositeItemWriter[JdbcBatchItemWriter→order_summaries, FlatFileItemWriter→CSV]
+
+Discoveries
+-----------
+1. Boot 3.2 + multiple Job beans: spring.batch.job.name required even when
+   spring.batch.job.enabled=false. JobLauncherApplicationRunner.afterPropertiesSet()
+   enforces unconditionally.
+
+2. CompositeItemWriter (Batch 5.1 / Boot 3.2.3) extends AbstractItemStreamItemWriter
+   → delegates open()/close() to ItemStream children automatically. No manual
+   .stream() registration on step needed.
+
+3. Records + JdbcBatchItemWriter: BeanPropertyItemSqlParameterSourceProvider fails
+   (no getX() convention). Use ItemPreparedStatementSetter with positional ? instead.
+
+4. Records + FlatFileItemWriter: BeanWrapperFieldExtractor same issue. Custom
+   lineAggregator calling record accessors directly is cleaner and explicit.
+
+5. JdbcBatchItemWriterBuilder.build() calls afterPropertiesSet() internally →
+   writer fully initialized when returned from @Bean.
+
+Test results
+------------
+AllGapsTest:          25/25
+EdgeCaseTests:        66/66
+SpringBatchTests:      8/8
+SpringContextTest:     6/6
+OrderEnrichmentTest:  10/10  ← NEW
+Total:               115/115
