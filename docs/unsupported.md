@@ -9,6 +9,7 @@ Consolidated list of SQL features not yet covered by the DSL, grouped by compone
 | `FOR UPDATE` / `FOR UPDATE SKIP LOCKED` | Use `selectRaw()` with raw SQL suffix, or native query |
 | `NULLS FIRST` / `NULLS LAST` in ORDER BY | Use `orderByExpr("col ASC NULLS FIRST", ASC)` (validate manually) |
 | Window functions (`ROW_NUMBER`, `RANK`, `LAG`, `LEAD`) | Use `selectRaw()` for the window expression |
+| `CASE WHEN ... THEN ... ELSE ... END` in SELECT | Use `selectRaw()` for the CASE expression |
 | `RECURSIVE` CTEs | Use `with()` + raw recursive SQL via subquery builder |
 | Typed HAVING on aggregates | Use `havingRaw("SUM(o.amount) >= ?", 1000)` |
 
