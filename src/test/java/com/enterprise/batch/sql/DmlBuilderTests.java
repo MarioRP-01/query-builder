@@ -9,6 +9,7 @@ import com.enterprise.batch.shared.querybridge.adapter.DmlProviderRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
@@ -147,6 +148,71 @@ public class DmlBuilderTests {
         assertThat(r.sql()).contains("RETURNING id INTO :id");
     }
 
+    // ==================== InsertBuilder setLiteral Tests ====================
+
+    @Test
+    void testInsertSetLiteralBuild() {
+        SqlResult r = InsertBuilder.insert()
+                .into(ORDERS)
+                .setLiteral(ORDERS.STATUS, "ACTIVE")
+                .setLiteral(ORDERS.AMOUNT, BigDecimal.valueOf(100))
+                .setLiteral(ORDERS.CREATED_DATE, LocalDate.of(2024, 3, 15))
+                .build();
+
+        assertThat(r.sql()).contains("'ACTIVE'");
+        assertThat(r.sql()).contains("100");
+        assertThat(r.sql()).contains("DATE '2024-03-15'");
+        assertThat(r.namedParameters()).isEmpty();
+    }
+
+    @Test
+    void testInsertMixedSetAndSetLiteral() {
+        SqlResult r = InsertBuilder.insert()
+                .into(ORDERS)
+                .set(ORDERS.ID, 42L)
+                .setLiteral(ORDERS.STATUS, "NEW")
+                .set(ORDERS.AMOUNT, BigDecimal.TEN)
+                .build();
+
+        assertThat(r.sql()).contains("id, status, amount");
+        assertThat(r.sql()).contains("'NEW'");
+        // Only id and amount are bound
+        assertThat(r.namedParameters()).hasSize(2);
+    }
+
+    @Test
+    void testInsertSetLiteralTemplate() {
+        SqlResult r = InsertBuilder.insert()
+                .into(ORDERS)
+                .set(ORDERS.ID, 0L)
+                .setLiteral(ORDERS.STATUS, "PENDING")
+                .set(ORDERS.AMOUNT, BigDecimal.ZERO)
+                .buildTemplate();
+
+        assertThat(r.sql()).isEqualTo(
+                "INSERT INTO orders (id, status, amount) VALUES (:id, 'PENDING', :amount)");
+        assertThat(r.namedParameters()).isEmpty();
+    }
+
+    @Test
+    void testInsertSetLiteralEscapesQuotes() {
+        SqlResult r = InsertBuilder.insert()
+                .into(ORDERS)
+                .setLiteral(ORDERS.STATUS, "it's")
+                .build();
+
+        assertThat(r.sql()).contains("'it''s'");
+    }
+
+    @Test
+    void testInsertSetLiteralRejectsNull() {
+        assertThatThrownBy(() ->
+                InsertBuilder.insert()
+                        .into(ORDERS)
+                        .setLiteral(ORDERS.STATUS, null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     // ==================== UpdateBuilder Tests ====================
 
     @Test
@@ -249,6 +315,34 @@ public class DmlBuilderTests {
                 .build();
 
         assertThat(r.sql()).contains("RETURNING id, status INTO :id, :status");
+    }
+
+    // ==================== UpdateBuilder setLiteral Tests ====================
+
+    @Test
+    void testUpdateSetLiteralBuild() {
+        SqlResult r = UpdateBuilder.update()
+                .table(ORDERS)
+                .setLiteral(ORDERS.STATUS, "ARCHIVED")
+                .where(eq(ORDERS.ID, 1L))
+                .build();
+
+        assertThat(r.sql()).contains("status = 'ARCHIVED'");
+        // Only the WHERE param is bound
+        assertThat(r.namedParameters()).hasSize(1);
+    }
+
+    @Test
+    void testUpdateSetLiteralTemplate() {
+        SqlResult r = UpdateBuilder.update()
+                .table(ORDERS)
+                .set(ORDERS.AMOUNT, BigDecimal.ONE)
+                .setLiteral(ORDERS.STATUS, "DONE")
+                .buildTemplate();
+
+        assertThat(r.sql()).isEqualTo(
+                "UPDATE orders o SET amount = :amount, status = 'DONE'");
+        assertThat(r.namedParameters()).isEmpty();
     }
 
     // ==================== DeleteBuilder Tests ====================

@@ -6,6 +6,7 @@ import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.Table;
 import com.enterprise.batch.sql.expression.CaseExpression;
 import com.enterprise.batch.sql.param.ParameterBinder;
+import com.enterprise.batch.sql.param.SqlLiteralFormatter;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -88,6 +89,17 @@ public class UpdateBuilder {
         if (value != null) {
             setClauses.add(new ValueSetClause(column, value));
         }
+        return this;
+    }
+
+    /**
+     * SET column = SQL literal. The value is inlined directly (not bound as a parameter).
+     * Stays constant in both {@link #build()} and {@link #buildTemplate()}.
+     */
+    public <T> UpdateBuilder setLiteral(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new LiteralSetClause(column, value));
         return this;
     }
 
@@ -274,6 +286,17 @@ public class UpdateBuilder {
         @Override
         public String toSql(ParameterBinder binder) {
             return column.name() + " = NULL";
+        }
+    }
+
+    private record LiteralSetClause(Column<?> column, Object value) implements SetClause {
+        @Override
+        public String toSql(ParameterBinder binder) {
+            return column.name() + " = " + SqlLiteralFormatter.format(value);
+        }
+        @Override
+        public String toTemplateSql() {
+            return column.name() + " = " + SqlLiteralFormatter.format(value);
         }
     }
 

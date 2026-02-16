@@ -16,6 +16,36 @@ SqlResult result = InsertBuilder.insert()
 
 Type safety enforced: `set(Column<T>, T)` — compiler rejects `set(ORDERS.ID, "not a long")`.
 
+#### `setLiteral()` — Inline Constants
+
+`setLiteral(Column<T>, T)` inlines the value directly into SQL as a formatted literal (not a bind parameter). Useful for constants that must stay fixed even in `buildTemplate()`:
+
+```java
+SqlResult result = InsertBuilder.insert()
+    .into(ORDERS)
+    .set(ORDERS.ID, 1001L)                            // bound: :id_1
+    .setLiteral(ORDERS.STATUS, "PENDING")              // inlined: 'PENDING'
+    .setLiteral(ORDERS.CREATED_DATE, LocalDate.of(2024, 3, 15))  // inlined: DATE '2024-03-15'
+    .build();
+// INSERT INTO orders (id, status, created_date)
+//   VALUES (:id_1, 'PENDING', DATE '2024-03-15')
+```
+
+Mixed `set()` + `setLiteral()` in template mode — literals stay fixed, bound columns become `:col_name` placeholders:
+
+```java
+SqlResult template = InsertBuilder.insert()
+    .into(ORDERS)
+    .set(ORDERS.ID, 0L)
+    .setLiteral(ORDERS.STATUS, "PENDING")
+    .set(ORDERS.AMOUNT, BigDecimal.ZERO)
+    .buildTemplate();
+// SQL:    INSERT INTO orders (id, status, amount) VALUES (:id, 'PENDING', :amount)
+// Params: {} (id and amount filled per-item; status always 'PENDING')
+```
+
+Supported types: `String`, `Number` (including `BigDecimal`), `Boolean` (→ `1`/`0`), `LocalDate` (→ `DATE 'yyyy-MM-dd'`). Null values throw NPE.
+
 ### Columnar API
 
 ```java
@@ -116,6 +146,7 @@ SqlResult result = UpdateBuilder.update()
 
 ```java
 .set(ORDERS.STATUS, "SHIPPED")              // SET status = :status_1
+.setLiteral(ORDERS.STATUS, "ARCHIVED")     // SET status = 'ARCHIVED' (inlined, not bound)
 .setNull(ORDERS.REGION)                     // SET region = NULL
 .setIfPresent(ORDERS.STATUS, maybeNull)     // skipped if null
 .setSubquery(ORDERS.AMOUNT, subResult)      // SET amount = (SELECT ...)
@@ -187,6 +218,18 @@ SqlResult template = UpdateBuilder.update()
     .buildTemplate();
 // SQL:    UPDATE orders o SET status = :status WHERE o.id = :id
 // Params: {} (filled per-item)
+```
+
+Mixed `set()` + `setLiteral()` in template mode — literals stay fixed:
+
+```java
+SqlResult template = UpdateBuilder.update()
+    .table(ORDERS)
+    .set(ORDERS.AMOUNT, BigDecimal.ZERO)
+    .setLiteral(ORDERS.STATUS, "PROCESSED")
+    .buildTemplate();
+// SQL:    UPDATE orders o SET amount = :amount, status = 'PROCESSED'
+// Params: {} (amount filled per-item; status always 'PROCESSED')
 ```
 
 ---

@@ -3,6 +3,7 @@ package com.enterprise.batch.sql.builder;
 import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.Table;
 import com.enterprise.batch.sql.param.ParameterBinder;
+import com.enterprise.batch.sql.param.SqlLiteralFormatter;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,7 +35,7 @@ public class InsertBuilder {
     private Table table;
     private final List<Column<?>> columns = new ArrayList<>();
     private final List<Object[]> rows = new ArrayList<>();
-    private final List<SetEntry<?>> setClauses = new ArrayList<>();
+    private final List<InsertSetEntry> setClauses = new ArrayList<>();
     private SqlResult selectFrom;
     private final List<Column<?>> returningColumns = new ArrayList<>();
 
@@ -88,7 +89,19 @@ public class InsertBuilder {
     public <T> InsertBuilder set(Column<T> column, T value) {
         Objects.requireNonNull(column, "column");
         Objects.requireNonNull(value, "value");
-        setClauses.add(new SetEntry<>(column, value));
+        setClauses.add(new ValueSetEntry<>(column, value));
+        return this;
+    }
+
+    /**
+     * Inlines a SQL literal directly in the INSERT statement.
+     * The value appears as a formatted constant, not a bind parameter.
+     * Useful for constants that must stay fixed in {@link #buildTemplate()}.
+     */
+    public <T> InsertBuilder setLiteral(Column<T> column, T value) {
+        Objects.requireNonNull(column, "column");
+        Objects.requireNonNull(value, "value");
+        setClauses.add(new LiteralSetEntry<>(column, value));
         return this;
     }
 
@@ -133,7 +146,20 @@ public class InsertBuilder {
         Objects.requireNonNull(table, "table required — call .into(Table)");
         List<Column<?>> cols = resolveTemplateColumns();
         String colNames = cols.stream().map(Column::name).collect(Collectors.joining(", "));
-        String placeholders = cols.stream().map(c -> ":" + c.name()).collect(Collectors.joining(", "));
+
+        String placeholders;
+        if (!setClauses.isEmpty()) {
+            // Dispatch: ValueSetEntry → :col_name, LiteralSetEntry → formatted literal
+            placeholders = setClauses.stream().map(entry -> {
+                if (entry instanceof LiteralSetEntry<?> lit) {
+                    return SqlLiteralFormatter.format(lit.value());
+                }
+                return ":" + entry.column().name();
+            }).collect(Collectors.joining(", "));
+        } else {
+            placeholders = cols.stream().map(c -> ":" + c.name()).collect(Collectors.joining(", "));
+        }
+
         String sql = "INSERT INTO " + table.tableName()
                 + " (" + colNames + ") VALUES (" + placeholders + ")";
         return new SqlResult(sql, Map.of());
@@ -183,9 +209,13 @@ public class InsertBuilder {
     private SqlResult buildSetApi() {
         List<String> colNames = new ArrayList<>();
         List<String> placeholders = new ArrayList<>();
-        for (SetEntry<?> entry : setClauses) {
-            colNames.add(entry.column.name());
-            placeholders.add(binder.bind(entry.value, entry.column.name()));
+        for (InsertSetEntry entry : setClauses) {
+            colNames.add(entry.column().name());
+            if (entry instanceof ValueSetEntry<?> v) {
+                placeholders.add(binder.bind(v.value(), v.column().name()));
+            } else if (entry instanceof LiteralSetEntry<?> lit) {
+                placeholders.add(SqlLiteralFormatter.format(lit.value()));
+            }
         }
         StringBuilder sql = new StringBuilder();
         sql.append("INSERT INTO ").append(table.tableName())
@@ -223,7 +253,7 @@ public class InsertBuilder {
         if (!columns.isEmpty()) return columns;
         if (!setClauses.isEmpty()) {
             return setClauses.stream()
-                    .map(s -> (Column<?>) s.column)
+                    .map(InsertSetEntry::column)
                     .collect(Collectors.toList());
         }
         throw new IllegalStateException("No columns — call .columns() or .set()");
@@ -238,5 +268,10 @@ public class InsertBuilder {
         }
     }
 
-    private record SetEntry<T>(Column<T> column, T value) {}
+    private sealed interface InsertSetEntry {
+        Column<?> column();
+    }
+
+    private record ValueSetEntry<T>(Column<T> column, T value) implements InsertSetEntry {}
+    private record LiteralSetEntry<T>(Column<T> column, T value) implements InsertSetEntry {}
 }
