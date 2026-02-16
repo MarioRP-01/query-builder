@@ -12,12 +12,16 @@ com.enterprise.batch
 │   ├── param/          ParameterBinder (named parameter management)
 │   ├── validation/     ExpressionValidator, SchemaValidator
 │   └── debug/          QueryDebugger
-├── spring/             BatchQueryProvider, BatchDmlProvider,
-│                       BatchReaderFactory, BatchWriterFactory,
+├── spring/             Shared framework (domain-agnostic)
+│   ├── port/           BatchQueryProvider, BatchDmlProvider
+│   └── adapter/        BatchReaderFactory, BatchWriterFactory,
 │                       QueryProviderRegistry, DmlProviderRegistry,
 │                       SpringBatchQueryConfig
-└── example/
-    └── tables/         OrderTable, CustomerTable, ProductTable, PaymentTable
+└── order/              Vertical domain slice
+    ├── domain/         OrderTable, CustomerTable, ProductTable, PaymentTable,
+    │                   OrderDto, OrderDetailDto, EnrichedOrderDto
+    ├── application/    OrderQueries, OrderEnricher
+    └── infrastructure/ ProcessOrdersJobConfig, OrderEnrichmentJobConfig
 ```
 
 ## Component Diagram

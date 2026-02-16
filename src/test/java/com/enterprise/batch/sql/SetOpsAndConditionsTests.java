@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
 import static org.assertj.core.api.Assertions.*;
 
 /**

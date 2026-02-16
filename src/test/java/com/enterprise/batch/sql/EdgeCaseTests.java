@@ -7,10 +7,10 @@ import com.enterprise.batch.sql.core.*;
 import com.enterprise.batch.sql.debug.QueryDebugger;
 import com.enterprise.batch.sql.param.ParameterBinder;
 import com.enterprise.batch.sql.validation.ExpressionValidator;
-import com.enterprise.batch.example.tables.CustomerTable;
-import com.enterprise.batch.example.tables.OrderTable;
-import com.enterprise.batch.example.tables.PaymentTable;
-import com.enterprise.batch.example.tables.ProductTable;
+import com.enterprise.batch.order.domain.CustomerTable;
+import com.enterprise.batch.order.domain.OrderTable;
+import com.enterprise.batch.order.domain.PaymentTable;
+import com.enterprise.batch.order.domain.ProductTable;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,10 +25,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
-import static com.enterprise.batch.example.tables.PaymentTable.PAYMENTS;
-import static com.enterprise.batch.example.tables.ProductTable.PRODUCTS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
+import static com.enterprise.batch.order.domain.PaymentTable.PAYMENTS;
+import static com.enterprise.batch.order.domain.ProductTable.PRODUCTS;
 import static org.assertj.core.api.Assertions.*;
 
 /**

@@ -34,8 +34,8 @@ import java.util.stream.Collectors;
  * <p>Example:
  * <pre>{@code
  * import static com.enterprise.batch.sql.condition.Conditions.*;
- * import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
- * import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+ * import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
+ * import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
  *
  * SqlResult result = SelectBuilder.query()
  *     .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref(), CUSTOMERS.NAME.ref())

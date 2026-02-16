@@ -1,4 +1,4 @@
-package com.enterprise.batch.example.tables;
+package com.enterprise.batch.order.domain;
 
 import com.enterprise.batch.sql.core.Column;
 import com.enterprise.batch.sql.core.Table;

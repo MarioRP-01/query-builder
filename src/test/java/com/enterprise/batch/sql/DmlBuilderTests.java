@@ -3,8 +3,8 @@ package com.enterprise.batch.sql;
 import com.enterprise.batch.sql.builder.*;
 import com.enterprise.batch.sql.builder.MergeBuilder.ColumnValue;
 import com.enterprise.batch.sql.param.ParameterBinder;
-import com.enterprise.batch.spring.BatchDmlProvider;
-import com.enterprise.batch.spring.DmlProviderRegistry;
+import com.enterprise.batch.spring.port.BatchDmlProvider;
+import com.enterprise.batch.spring.adapter.DmlProviderRegistry;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,8 +12,8 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
 import static org.assertj.core.api.Assertions.*;
 
 /**

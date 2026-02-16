@@ -1,4 +1,6 @@
-package com.enterprise.batch.spring;
+package com.enterprise.batch.spring.adapter;
+
+import com.enterprise.batch.spring.port.BatchQueryProvider;
 
 import com.enterprise.batch.sql.builder.SqlResult;
 

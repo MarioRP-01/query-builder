@@ -1,10 +1,11 @@
-package com.enterprise.batch.example;
+package com.enterprise.batch.order.infrastructure;
 
-import com.enterprise.batch.sql.builder.SelectBuilder;
-import com.enterprise.batch.sql.core.SortDirection;
-import com.enterprise.batch.spring.BatchQueryProvider;
-import com.enterprise.batch.spring.BatchReaderFactory;
-import com.enterprise.batch.spring.QueryProviderRegistry;
+import com.enterprise.batch.order.application.OrderEnricher;
+import com.enterprise.batch.order.application.OrderQueries;
+import com.enterprise.batch.order.domain.EnrichedOrderDto;
+import com.enterprise.batch.order.domain.OrderDetailDto;
+import com.enterprise.batch.spring.adapter.BatchReaderFactory;
+import com.enterprise.batch.spring.adapter.QueryProviderRegistry;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -26,45 +27,18 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
-import static com.enterprise.batch.example.tables.ProductTable.PRODUCTS;
-import static com.enterprise.batch.sql.condition.Conditions.*;
-
 @Configuration
 public class OrderEnrichmentJobConfig {
 
     @Autowired
     void registerProviders(QueryProviderRegistry registry) {
-        registry.register("orderDetails", orderDetailsProvider());
-    }
-
-    // --- Query provider: 3-way join orders + customers + products ---
-
-    BatchQueryProvider orderDetailsProvider() {
-        return params -> {
-            String status = (String) params.getOrDefault("status", "PENDING");
-            return SelectBuilder.query()
-                .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref(), ORDERS.STATUS.ref(),
-                        ORDERS.CREATED_DATE.ref(),
-                        CUSTOMERS.NAME.refAs("customer_name"),
-                        CUSTOMERS.TIER.refAs("customer_tier"),
-                        PRODUCTS.NAME.refAs("product_name"),
-                        PRODUCTS.CATEGORY.refAs("product_category"))
-                .from(ORDERS)
-                .innerJoin(CUSTOMERS, ORDERS.CUSTOMER_ID, CUSTOMERS.ID)
-                .innerJoin(PRODUCTS, ORDERS.PRODUCT_ID, PRODUCTS.ID)
-                .where(eq(ORDERS.STATUS, status))
-                .orderBy(ORDERS.AMOUNT, SortDirection.DESC)
-                .build();
-        };
+        registry.register("orderDetails", OrderQueries.orderDetails());
     }
 
     // --- Reader ---
@@ -79,30 +53,11 @@ public class OrderEnrichmentJobConfig {
             Map.of("status", "PENDING"));
     }
 
-    // --- Processor: enrich with tax, discount, priority ---
+    // --- Processor ---
 
     @Bean
     ItemProcessor<OrderDetailDto, EnrichedOrderDto> orderEnrichmentProcessor() {
-        return item -> {
-            BigDecimal tax = item.amount().multiply(new BigDecimal("0.10"));
-
-            BigDecimal discountRate = switch (item.customerTier()) {
-                case "GOLD"   -> new BigDecimal("0.15");
-                case "SILVER" -> new BigDecimal("0.10");
-                default       -> BigDecimal.ZERO;
-            };
-            BigDecimal discount = item.amount().multiply(discountRate);
-
-            BigDecimal finalAmount = item.amount().add(tax).subtract(discount);
-
-            String priority = item.amount().compareTo(new BigDecimal("1000")) >= 0
-                ? "HIGH" : "NORMAL";
-
-            return new EnrichedOrderDto(
-                item.orderId(), item.customerName(), item.customerTier(),
-                item.productName(), item.amount(), tax, discount, finalAmount,
-                priority, LocalDate.now());
-        };
+        return new OrderEnricher()::enrich;
     }
 
     // --- Writer 1: insert enriched summaries into DB ---

@@ -20,8 +20,8 @@ Type-safe SQL DSL for Oracle + Spring Batch. Generates JDBC-ready SQL with named
 
 ```java
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
 
 SqlResult result = SelectBuilder.query()
     .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref(), CUSTOMERS.NAME.ref())
@@ -53,4 +53,4 @@ mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.DmlBuilder
 mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.OrderEnrichmentTest"  # 10 tests
 ```
 
-Java 17+. Oracle target DB. Tests are standalone (no JUnit) — each `main()` exits with code 1 on failure.
+Java 17+. Oracle target DB. Tests use JUnit 5 + AssertJ.

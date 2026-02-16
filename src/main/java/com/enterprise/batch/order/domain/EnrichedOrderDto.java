@@ -1,4 +1,4 @@
-package com.enterprise.batch.example;
+package com.enterprise.batch.order.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

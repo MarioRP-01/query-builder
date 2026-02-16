@@ -59,16 +59,32 @@ com.enterprise.batch.sql
 └── debug/                 # Production debugging (#13)
     └── QueryDebugger.java
 
-com.enterprise.batch.spring    # Spring Batch integration
-├── BatchQueryProvider.java    # Provider contract (#9)
-├── BatchReaderFactory.java    # JdbcCursorItemReader factory
-└── QueryProviderRegistry.java # Auto-discovery
+com.enterprise.batch.spring         # Spring Batch integration (shared framework)
+├── port/
+│   ├── BatchQueryProvider.java     # Provider contract (#9)
+│   └── BatchDmlProvider.java       # DML provider contract
+└── adapter/
+    ├── BatchReaderFactory.java     # JdbcCursorItemReader factory
+    ├── BatchWriterFactory.java     # JdbcBatchItemWriter factory
+    ├── QueryProviderRegistry.java  # Named query lookup
+    ├── DmlProviderRegistry.java    # Named DML lookup
+    └── SpringBatchQueryConfig.java # @Configuration wiring
 
-com.enterprise.batch.example.tables  # Example table definitions
-├── OrderTable.java
-├── CustomerTable.java
-├── PaymentTable.java
-└── ProductTable.java
+com.enterprise.batch.order          # Vertical domain slice
+├── domain/                         # Pure Java: tables + DTOs
+│   ├── OrderTable.java
+│   ├── CustomerTable.java
+│   ├── ProductTable.java
+│   ├── PaymentTable.java
+│   ├── OrderDto.java
+│   ├── OrderDetailDto.java
+│   └── EnrichedOrderDto.java
+├── application/                    # Use cases: providers + business logic
+│   ├── OrderQueries.java
+│   └── OrderEnricher.java
+└── infrastructure/                 # Spring @Configuration wiring
+    ├── ProcessOrdersJobConfig.java
+    └── OrderEnrichmentJobConfig.java
 ```
 
 ## Usage Examples
@@ -77,8 +93,8 @@ com.enterprise.batch.example.tables  # Example table definitions
 
 ```java
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
 
 SqlResult result = SelectBuilder.query()
     .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref(), CUSTOMERS.NAME.ref())

@@ -1,4 +1,4 @@
-package com.enterprise.batch.spring;
+package com.enterprise.batch.spring.port;
 
 import com.enterprise.batch.sql.builder.SqlResult;
 

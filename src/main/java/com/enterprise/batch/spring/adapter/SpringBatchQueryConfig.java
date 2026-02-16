@@ -1,4 +1,4 @@
-package com.enterprise.batch.spring;
+package com.enterprise.batch.spring.adapter;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

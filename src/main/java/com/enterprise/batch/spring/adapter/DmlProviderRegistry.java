@@ -1,4 +1,6 @@
-package com.enterprise.batch.spring;
+package com.enterprise.batch.spring.adapter;
+
+import com.enterprise.batch.spring.port.BatchDmlProvider;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;

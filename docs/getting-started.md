@@ -49,7 +49,7 @@ Rules:
 
 ```java
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
 
 import com.enterprise.batch.sql.builder.SelectBuilder;
 import com.enterprise.batch.sql.builder.SqlResult;
@@ -155,7 +155,7 @@ SqlResult result = SelectBuilder.query()
 ## JOINs
 
 ```java
-import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
 import com.enterprise.batch.sql.core.JoinType;
 
 SqlResult result = SelectBuilder.query()

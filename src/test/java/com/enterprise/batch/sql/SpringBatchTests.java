@@ -2,15 +2,15 @@ package com.enterprise.batch.sql;
 
 import com.enterprise.batch.sql.builder.SelectBuilder;
 import com.enterprise.batch.sql.builder.SqlResult;
-import com.enterprise.batch.spring.BatchQueryProvider;
-import com.enterprise.batch.spring.QueryProviderRegistry;
+import com.enterprise.batch.spring.port.BatchQueryProvider;
+import com.enterprise.batch.spring.adapter.QueryProviderRegistry;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
-import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
+import static com.enterprise.batch.order.domain.OrderTable.ORDERS;
 import static org.assertj.core.api.Assertions.*;
 
 /**
