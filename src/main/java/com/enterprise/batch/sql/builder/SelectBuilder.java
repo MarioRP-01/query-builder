@@ -141,6 +141,25 @@ public class SelectBuilder {
         return this;
     }
 
+    /**
+     * Adds a CTE whose query is built internally via {@link Cte#buildQuery(ParameterBinder)}.
+     * The CTE's buildQuery receives this builder's shared binder.
+     */
+    public SelectBuilder with(Cte cte) {
+        SqlResult cteQuery = cte.buildQuery(binder);
+        ctes.add(new CteClause(cte.cteName(), cteQuery.sql()));
+        return this;
+    }
+
+    /**
+     * Adds a CTE with an externally supplied query.
+     * Use for parameterized or dynamic CTEs where the query is built outside.
+     */
+    public SelectBuilder with(Cte cte, SqlResult cteQuery) {
+        ctes.add(new CteClause(cte.cteName(), cteQuery.sql()));
+        return this;
+    }
+
     // ==================== SELECT ====================
 
     public SelectBuilder select(String... columns) {

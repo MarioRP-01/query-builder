@@ -35,6 +35,7 @@ Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracl
 5. **`MergeBuilder.merge()`** — Oracle MERGE: `.into()` → `.usingDual()`/`.usingSubquery()` → `.on()` → `.whenMatched*()`/`.whenNotMatchedInsert()` → `.build()`
 6. **`Conditions.*`** (static import) — composable condition DSL: `eq()`, `or()`, `and()`, `eqIfPresent()`, `exists()`, etc.
 7. **`Cases.*`** (static import) — CASE expressions: `Cases.when(condition).then(val)...orElse(val).as(alias)` (searched), `Cases.of(column).when(val).then(val)...` (simple)
+8. **`Cte`** (abstract class extending `Table`) — first-class CTE: define columns + optional `buildQuery(binder)`. Three modes: fixed (`with(cte)`), parameterized (`with(cte, cte.buildQuery(binder, args))`), dynamic (`with(cte, externalQuery)`). Columns work with `from()`, `join()`, `ref()` like regular tables.
 
 ### Spring Batch integration (`com.enterprise.batch.shared.querybridge`) — shared framework
 
