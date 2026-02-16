@@ -7,43 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Maven + Java 17+. Oracle is the target database; Spring Batch is the runtime framework.
 
 ```bash
-# Compile everything (requires Maven)
+# Compile everything
 mvn compile
 
-# Run gap tests (25 tests covering all 14 design gaps)
-mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.AllGapsTest"
+# Run all tests (187 tests across 8 classes)
+mvn test
 
-# Run edge-case tests (66 tests: nulls, injection, concurrency, etc.)
-mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.EdgeCaseTests"
-
-# Run Spring Batch integration tests (8 tests: provider, factory, registry)
-mvn compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringBatchTests"
-
-# Run Spring context test (6 tests: boot, beans, job execution)
-mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SpringContextTest"
-
-# Run DML builder tests (33 tests: INSERT, UPDATE, DELETE, MERGE, Spring registry)
-mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.DmlBuilderTests"
-
-# Run order enrichment test (10 tests: read→process→DB+CSV write)
-mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.OrderEnrichmentTest"
-
-# Run arithmetic & CASE tests (22 tests: arithmetic SET, CASE expressions, SELECT refactor)
-mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.ArithmeticAndCaseTests"
-
-# Run set ops & conditions tests (23 tests: EXCEPT, INTERSECT, notBetween, endsWith, FOR UPDATE, NULLS FIRST/LAST)
-mvn test-compile exec:java -Dexec.mainClass="com.enterprise.batch.sql.SetOpsAndConditionsTests"
+# Run a single test class
+mvn test -Dtest=AllGapsTest
+mvn test -Dtest=EdgeCaseTests
+mvn test -Dtest=SpringContextTest
+mvn test -Dtest=OrderEnrichmentTest
 ```
 
-Tests are standalone (no JUnit). Each test class has `main()` and exits with code 1 on failure.
-
-Core-only build (no Maven/Spring required — compiles SQL DSL + tests only):
-```bash
-find src -name "*.java" -not -path "*/spring/BatchReaderFactory.java" -not -path "*/spring/BatchWriterFactory.java" -not -path "*/spring/SpringBatchQueryConfig.java" | xargs javac -d out
-java -cp out com.enterprise.batch.sql.AllGapsTest
-java -cp out com.enterprise.batch.sql.EdgeCaseTests
-java -cp out com.enterprise.batch.sql.SpringBatchTests
-```
+Tests use JUnit 5 + AssertJ (via `spring-boot-starter-test`).
 
 ## Architecture
 

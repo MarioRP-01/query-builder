@@ -12,6 +12,8 @@ import com.enterprise.batch.example.tables.OrderTable;
 import com.enterprise.batch.example.tables.PaymentTable;
 import com.enterprise.batch.example.tables.ProductTable;
 
+import org.junit.jupiter.api.Test;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,132 +29,16 @@ import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
 import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
 import static com.enterprise.batch.example.tables.PaymentTable.PAYMENTS;
 import static com.enterprise.batch.example.tables.ProductTable.PRODUCTS;
+import static org.assertj.core.api.Assertions.*;
 
 /**
  * Edge-case and stress tests beyond the gap-specific tests.
  */
 public class EdgeCaseTests {
 
-    private int passed = 0;
-    private int failed = 0;
-
-    public static void main(String[] args) {
-        EdgeCaseTests t = new EdgeCaseTests();
-        t.runAll();
-    }
-
-    public void runAll() {
-        System.out.println("=== Running Edge Case Tests ===\n");
-
-        // Null/empty edge cases
-        test("Where with all-null conditions produces no WHERE", this::testAllNullConditions);
-        test("Empty where() produces no WHERE clause", this::testEmptyWhere);
-        test("neq() strict null throws NPE", this::testNeqNullThrows);
-        test("gt() strict null throws NPE", this::testGtNullThrows);
-        test("lt() strict null throws NPE", this::testLtNullThrows);
-        test("between() strict null from throws NPE", this::testBetweenNullFromThrows);
-        test("between() strict null to throws NPE", this::testBetweenNullToThrows);
-        test("like() strict null pattern throws NPE", this::testLikeNullThrows);
-        test("IN with empty list throws", this::testInEmptyListThrows);
-        test("inIfPresent with null list returns null", this::testInIfPresentNullList);
-        test("inIfPresent with empty list returns null", this::testInIfPresentEmptyList);
-        test("containsIfPresent with null returns null", this::testContainsIfPresentNull);
-        test("betweenIfPresent with null from returns null", this::testBetweenIfPresentNullFrom);
-        test("betweenIfPresent with null to returns null", this::testBetweenIfPresentNullTo);
-
-        // Composite edge cases
-        test("and() with single condition unwraps", this::testAndSingleUnwrap);
-        test("or() with single condition unwraps", this::testOrSingleUnwrap);
-        test("and() with all nulls throws", this::testAndAllNullsThrows);
-        test("or() with all nulls throws", this::testOrAllNullsThrows);
-        test("andIfAny with all nulls returns null", this::testAndIfAnyAllNulls);
-        test("Deeply nested AND/OR", this::testDeeplyNestedAndOr);
-
-        // SQL injection variants
-        test("Injection: single quotes in identifier", this::testInjectionSingleQuotes);
-        test("Injection: block comment in expression", this::testInjectionBlockComment);
-        test("Injection: UNION keyword in raw expression", this::testInjectionUnionInExpression);
-        test("Injection: semicolon in expression", this::testInjectionSemicolon);
-        test("Injection: null identifier rejected", this::testInjectionNullIdentifier);
-        test("Injection: blank expression rejected", this::testInjectionBlankExpression);
-        test("Injection: ALTER in identifier", this::testInjectionAlterIdentifier);
-        test("Values are parameterized, never inlined in SQL", this::testValuesNeverInlined);
-
-        // Dialect edge cases
-        test("ANSI limit only", this::testAnsiLimitOnly);
-        test("ANSI offset only", this::testAnsiOffsetOnly);
-
-        // Column/table features
-        test("Column ref produces alias.name", this::testColumnRef);
-        test("Column refAs produces alias.name AS alias", this::testColumnRefAs);
-        test("Column aggregates produce correct SQL", this::testColumnAggregates);
-        test("Table declaration produces tableName alias", this::testTableDeclaration);
-        test("Table allColumns returns all defined columns", this::testTableAllColumns);
-        test("Aliased table produces independent columns", this::testAliasedTableIndependence);
-        test("Multiple aliases of same table are independent", this::testMultipleAliases);
-
-        // SelectBuilder features
-        test("selectDistinct produces DISTINCT", this::testSelectDistinct);
-        test("selectRaw with valid expression works", this::testSelectRaw);
-        test("selectRaw with dangerous keyword fails", this::testSelectRawInjection);
-        test("fromSubquery wraps in parentheses", this::testFromSubquery);
-        test("leftJoin shortcut works", this::testLeftJoin);
-        test("Multi-condition ON join", this::testMultiConditionJoin);
-        test("groupByExpr validates expression", this::testGroupByExprValidation);
-        test("Multiple havingRaw conditions combined with AND", this::testMultipleHaving);
-        test("No FROM clause (e.g. SELECT 1)", this::testNoFrom);
-
-        // SqlResult features
-        test("toPositional replaces all named params with ?", this::testPositionalConversion);
-        test("verify() passes on valid query", this::testVerifyValid);
-        test("toDebugString quotes strings, not numbers", this::testDebugStringTypes);
-
-        // ParameterBinder uniqueness
-        test("Shared binder generates globally unique names", this::testBinderUniqueness);
-
-        // UnionBuilder
-        test("UNION (not ALL) uses UNION keyword", this::testUnionNotAll);
-        test("Union with three queries", this::testTripleUnion);
-
-        // CTE with multiple WITH clauses
-        test("Multiple CTEs separated by comma", this::testMultipleCtes);
-
-        // Thread safety: concurrent builder usage
-        test("Concurrent builds produce isolated results", this::testConcurrentBuilds);
-
-
-        // IN list condition
-        test("IN list with multiple values", this::testInListMultipleValues);
-
-        // LIKE / contains / startsWith
-        test("like() produces LIKE", this::testLike);
-        test("notLike() produces NOT LIKE", this::testNotLike);
-        test("contains() wraps value with %", this::testContains);
-        test("startsWith() appends %", this::testStartsWith);
-
-        // isNull / isNotNull
-        test("isNull produces IS NULL", this::testIsNull);
-        test("isNotNull produces IS NOT NULL", this::testIsNotNull);
-
-        // notIn
-        test("notIn produces NOT IN", this::testNotIn);
-
-        // Raw condition with parameters
-        test("Raw condition with ? parameters", this::testRawWithParams);
-
-        // EXISTS / NOT EXISTS
-        test("notExists produces NOT EXISTS", this::testNotExists);
-
-        // Column-to-column conditions
-        test("eqColumn produces col = col", this::testEqColumn);
-        test("columnOp with GT produces col > col", this::testColumnOpGt);
-
-        System.out.println("\n=== Edge Case Results: " + passed + " passed, " + failed + " failed ===");
-        if (failed > 0) System.exit(1);
-    }
-
     // ==================== Null/empty edge cases ====================
 
+    @Test
     void testAllNullConditions() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -163,71 +49,85 @@ public class EdgeCaseTests {
                         containsIfPresent(ORDERS.CATEGORY, null)
                 )
                 .build();
-        assertNotContains(r.sql(), "WHERE");
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).doesNotContain("WHERE");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testEmptyWhere() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .build();
-        assertNotContains(r.sql(), "WHERE");
+        assertThat(r.sql()).doesNotContain("WHERE");
     }
 
+    @Test
     void testNeqNullThrows() {
-        assertThrows(NullPointerException.class, () -> neq(ORDERS.STATUS, null));
+        assertThatThrownBy(() -> neq(ORDERS.STATUS, null)).isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testGtNullThrows() {
-        assertThrows(NullPointerException.class, () -> gt(ORDERS.AMOUNT, null));
+        assertThatThrownBy(() -> gt(ORDERS.AMOUNT, null)).isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testLtNullThrows() {
-        assertThrows(NullPointerException.class, () -> lt(ORDERS.AMOUNT, null));
+        assertThatThrownBy(() -> lt(ORDERS.AMOUNT, null)).isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testBetweenNullFromThrows() {
-        assertThrows(NullPointerException.class,
-                () -> between(ORDERS.AMOUNT, null, new BigDecimal("100")));
+        assertThatThrownBy(() -> between(ORDERS.AMOUNT, null, new BigDecimal("100")))
+                .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testBetweenNullToThrows() {
-        assertThrows(NullPointerException.class,
-                () -> between(ORDERS.AMOUNT, new BigDecimal("1"), null));
+        assertThatThrownBy(() -> between(ORDERS.AMOUNT, new BigDecimal("1"), null))
+                .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testLikeNullThrows() {
-        assertThrows(NullPointerException.class, () -> like(ORDERS.STATUS, null));
+        assertThatThrownBy(() -> like(ORDERS.STATUS, null)).isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testInEmptyListThrows() {
-        assertThrows(IllegalArgumentException.class,
-                () -> in(ORDERS.STATUS, List.of()));
+        assertThatThrownBy(() -> in(ORDERS.STATUS, List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInIfPresentNullList() {
-        assertNull(inIfPresent(ORDERS.STATUS, null));
+        assertThat(inIfPresent(ORDERS.STATUS, null)).isNull();
     }
 
+    @Test
     void testInIfPresentEmptyList() {
-        assertNull(inIfPresent(ORDERS.STATUS, List.of()));
+        assertThat(inIfPresent(ORDERS.STATUS, List.of())).isNull();
     }
 
+    @Test
     void testContainsIfPresentNull() {
-        assertNull(containsIfPresent(ORDERS.STATUS, null));
+        assertThat(containsIfPresent(ORDERS.STATUS, null)).isNull();
     }
 
+    @Test
     void testBetweenIfPresentNullFrom() {
-        assertNull(betweenIfPresent(ORDERS.AMOUNT, null, new BigDecimal("100")));
+        assertThat(betweenIfPresent(ORDERS.AMOUNT, null, new BigDecimal("100"))).isNull();
     }
 
+    @Test
     void testBetweenIfPresentNullTo() {
-        assertNull(betweenIfPresent(ORDERS.AMOUNT, new BigDecimal("1"), null));
+        assertThat(betweenIfPresent(ORDERS.AMOUNT, new BigDecimal("1"), null)).isNull();
     }
 
     // ==================== Composite edge cases ====================
 
+    @Test
     void testAndSingleUnwrap() {
         // and() with 1 condition should return the condition itself, not wrap in parens
         SqlResult r = SelectBuilder.query()
@@ -235,33 +135,38 @@ public class EdgeCaseTests {
                 .from(ORDERS)
                 .where(and(eq(ORDERS.STATUS, "X")))
                 .build();
-        assertNotContains(r.sql(), "(");
-        assertContains(r.sql(), "o.status =");
+        assertThat(r.sql()).doesNotContain("(");
+        assertThat(r.sql()).contains("o.status =");
     }
 
+    @Test
     void testOrSingleUnwrap() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .where(or(eq(ORDERS.STATUS, "X")))
                 .build();
-        assertNotContains(r.sql(), "(");
+        assertThat(r.sql()).doesNotContain("(");
     }
 
+    @Test
     void testAndAllNullsThrows() {
-        assertThrows(IllegalArgumentException.class,
-                () -> and(null, null));
+        assertThatThrownBy(() -> and(null, null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testOrAllNullsThrows() {
-        assertThrows(IllegalArgumentException.class,
-                () -> or(null, null));
+        assertThatThrownBy(() -> or(null, null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testAndIfAnyAllNulls() {
-        assertNull(andIfAny(null, null, null));
+        assertThat(andIfAny(null, null, null)).isNull();
     }
 
+    @Test
     void testDeeplyNestedAndOr() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -280,50 +185,58 @@ public class EdgeCaseTests {
                 )
                 .build();
         // Should produce: ((o.status = :s AND (o.category = :c1 OR o.category = :c2)) OR o.region = :r)
-        assertContains(r.sql(), "OR");
-        assertContains(r.sql(), "AND");
-        assertEquals(4, r.namedParameters().size());
+        assertThat(r.sql()).contains("OR");
+        assertThat(r.sql()).contains("AND");
+        assertThat(r.namedParameters().size()).isEqualTo(4);
     }
 
     // ==================== SQL injection ====================
 
+    @Test
     void testInjectionSingleQuotes() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateIdentifier("name'"));
+        assertThatThrownBy(() -> ExpressionValidator.validateIdentifier("name'"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInjectionBlockComment() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateExpression("amount /* hack */"));
+        assertThatThrownBy(() -> ExpressionValidator.validateExpression("amount /* hack */"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInjectionUnionInExpression() {
         // UNION is not in the dangerous keyword list (it's a SELECT keyword, not DML)
         // But DROP, INSERT etc. are
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateExpression("1; INSERT INTO evil VALUES(1)"));
+        assertThatThrownBy(() -> ExpressionValidator.validateExpression("1; INSERT INTO evil VALUES(1)"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInjectionSemicolon() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateExpression("1; SELECT 1"));
+        assertThatThrownBy(() -> ExpressionValidator.validateExpression("1; SELECT 1"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInjectionNullIdentifier() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateIdentifier(null));
+        assertThatThrownBy(() -> ExpressionValidator.validateIdentifier(null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInjectionBlankExpression() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateExpression("   "));
+        assertThatThrownBy(() -> ExpressionValidator.validateExpression("   "))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInjectionAlterIdentifier() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionValidator.validateIdentifier("ALTER"));
+        assertThatThrownBy(() -> ExpressionValidator.validateIdentifier("ALTER"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testValuesNeverInlined() {
         String malicious = "'; DROP TABLE orders; --";
         SqlResult r = SelectBuilder.query()
@@ -332,99 +245,111 @@ public class EdgeCaseTests {
                 .where(eq(ORDERS.STATUS, malicious))
                 .build();
         // The SQL must use a named parameter, never inline the value
-        assertNotContains(r.sql(), "DROP");
-        assertNotContains(r.sql(), malicious);
-        assertContains(r.sql(), ":status_");
+        assertThat(r.sql()).doesNotContain("DROP");
+        assertThat(r.sql()).doesNotContain(malicious);
+        assertThat(r.sql()).contains(":status_");
         // The value is in the parameter map
-        assertTrue(r.namedParameters().values().contains(malicious),
-                "Malicious value should be in params, not SQL");
+        assertThat(r.namedParameters().values().contains(malicious))
+                .as("Malicious value should be in params, not SQL").isTrue();
     }
 
     // ==================== Dialect edge cases ====================
 
+    @Test
     void testAnsiLimitOnly() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS).limit(10).build();
-        assertContains(r.sql(), "FETCH FIRST 10 ROWS ONLY");
+        assertThat(r.sql()).contains("FETCH FIRST 10 ROWS ONLY");
     }
 
+    @Test
     void testAnsiOffsetOnly() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS).offset(5).build();
-        assertContains(r.sql(), "OFFSET 5 ROWS");
+        assertThat(r.sql()).contains("OFFSET 5 ROWS");
     }
-
 
     // ==================== Column/table ====================
 
+    @Test
     void testColumnRef() {
-        assertEquals("o.id", ORDERS.ID.ref());
-        assertEquals("c.name", CUSTOMERS.NAME.ref());
+        assertThat(ORDERS.ID.ref()).isEqualTo("o.id");
+        assertThat(CUSTOMERS.NAME.ref()).isEqualTo("c.name");
     }
 
+    @Test
     void testColumnRefAs() {
-        assertEquals("o.amount AS total", ORDERS.AMOUNT.refAs("total"));
+        assertThat(ORDERS.AMOUNT.refAs("total")).isEqualTo("o.amount AS total");
     }
 
+    @Test
     void testColumnAggregates() {
-        assertEquals("COUNT(o.id) AS cnt", ORDERS.ID.countAs("cnt"));
-        assertEquals("SUM(o.amount) AS total", ORDERS.AMOUNT.sumAs("total"));
-        assertEquals("AVG(o.amount) AS avg_amt", ORDERS.AMOUNT.avgAs("avg_amt"));
-        assertEquals("MIN(o.amount) AS min_amt", ORDERS.AMOUNT.minAs("min_amt"));
-        assertEquals("MAX(o.amount) AS max_amt", ORDERS.AMOUNT.maxAs("max_amt"));
+        assertThat(ORDERS.ID.countAs("cnt")).isEqualTo("COUNT(o.id) AS cnt");
+        assertThat(ORDERS.AMOUNT.sumAs("total")).isEqualTo("SUM(o.amount) AS total");
+        assertThat(ORDERS.AMOUNT.avgAs("avg_amt")).isEqualTo("AVG(o.amount) AS avg_amt");
+        assertThat(ORDERS.AMOUNT.minAs("min_amt")).isEqualTo("MIN(o.amount) AS min_amt");
+        assertThat(ORDERS.AMOUNT.maxAs("max_amt")).isEqualTo("MAX(o.amount) AS max_amt");
     }
 
+    @Test
     void testTableDeclaration() {
-        assertEquals("orders o", ORDERS.declaration());
-        assertEquals("customers c", CUSTOMERS.declaration());
+        assertThat(ORDERS.declaration()).isEqualTo("orders o");
+        assertThat(CUSTOMERS.declaration()).isEqualTo("customers c");
     }
 
+    @Test
     void testTableAllColumns() {
-        assertTrue(ORDERS.allColumns().size() == 8,
-                "OrderTable should have 8 columns, got " + ORDERS.allColumns().size());
-        assertTrue(CUSTOMERS.allColumns().size() == 4,
-                "CustomerTable should have 4 columns");
+        assertThat(ORDERS.allColumns().size())
+                .as("OrderTable should have 8 columns, got " + ORDERS.allColumns().size()).isEqualTo(8);
+        assertThat(CUSTOMERS.allColumns().size())
+                .as("CustomerTable should have 4 columns").isEqualTo(4);
     }
 
+    @Test
     void testAliasedTableIndependence() {
         OrderTable o2 = ORDERS.as("o2");
         // Aliases must differ
-        assertEquals("o", ORDERS.alias());
-        assertEquals("o2", o2.alias());
+        assertThat(ORDERS.alias()).isEqualTo("o");
+        assertThat(o2.alias()).isEqualTo("o2");
         // Column refs must reflect the alias
-        assertEquals("o.id", ORDERS.ID.ref());
-        assertEquals("o2.id", o2.ID.ref());
+        assertThat(ORDERS.ID.ref()).isEqualTo("o.id");
+        assertThat(o2.ID.ref()).isEqualTo("o2.id");
     }
 
+    @Test
     void testMultipleAliases() {
         OrderTable a = ORDERS.as("a");
         OrderTable b = ORDERS.as("b");
-        assertNotEquals(a.ID.ref(), b.ID.ref());
-        assertEquals("a.id", a.ID.ref());
-        assertEquals("b.id", b.ID.ref());
+        assertThat(a.ID.ref()).isNotEqualTo(b.ID.ref());
+        assertThat(a.ID.ref()).isEqualTo("a.id");
+        assertThat(b.ID.ref()).isEqualTo("b.id");
     }
 
     // ==================== SelectBuilder features ====================
 
+    @Test
     void testSelectDistinct() {
         SqlResult r = SelectBuilder.query()
                 .selectDistinct(ORDERS.CUSTOMER_ID.ref())
                 .from(ORDERS).build();
-        assertContains(r.sql(), "SELECT DISTINCT o.customer_id");
+        assertThat(r.sql()).contains("SELECT DISTINCT o.customer_id");
     }
 
+    @Test
     void testSelectRaw() {
         SqlResult r = SelectBuilder.query()
                 .selectRaw("1 AS one")
                 .build();
-        assertContains(r.sql(), "SELECT 1 AS one");
+        assertThat(r.sql()).contains("SELECT 1 AS one");
     }
 
+    @Test
     void testSelectRawInjection() {
-        assertThrows(IllegalArgumentException.class,
-                () -> SelectBuilder.query().selectRaw("1; DROP TABLE x"));
+        assertThatThrownBy(() -> SelectBuilder.query().selectRaw("1; DROP TABLE x"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testFromSubquery() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult sub = SelectBuilder.subquery(binder)
@@ -436,19 +361,21 @@ public class EdgeCaseTests {
                 .selectRaw("sub.id")
                 .fromSubquery(sub, "sub")
                 .build();
-        assertContains(r.sql(), "FROM (SELECT o.id");
-        assertContains(r.sql(), ") sub");
+        assertThat(r.sql()).contains("FROM (SELECT o.id");
+        assertThat(r.sql()).contains(") sub");
     }
 
+    @Test
     void testLeftJoin() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref(), PAYMENTS.STATUS.ref())
                 .from(ORDERS)
                 .leftJoin(PAYMENTS, ORDERS.ID, PAYMENTS.ORDER_ID)
                 .build();
-        assertContains(r.sql(), "LEFT JOIN payments p ON o.id = p.order_id");
+        assertThat(r.sql()).contains("LEFT JOIN payments p ON o.id = p.order_id");
     }
 
+    @Test
     void testMultiConditionJoin() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -457,17 +384,19 @@ public class EdgeCaseTests {
                         eqColumn(ORDERS.CUSTOMER_ID, CUSTOMERS.ID),
                         eq(CUSTOMERS.REGION, "EU"))
                 .build();
-        assertContains(r.sql(), "ON o.customer_id = c.id AND c.region =");
+        assertThat(r.sql()).contains("ON o.customer_id = c.id AND c.region =");
     }
 
+    @Test
     void testGroupByExprValidation() {
-        assertThrows(IllegalArgumentException.class,
-                () -> SelectBuilder.query()
-                        .select(ORDERS.ID.ref())
-                        .from(ORDERS)
-                        .groupByExpr("1; DROP TABLE x"));
+        assertThatThrownBy(() -> SelectBuilder.query()
+                .select(ORDERS.ID.ref())
+                .from(ORDERS)
+                .groupByExpr("1; DROP TABLE x"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testMultipleHaving() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.STATUS.ref(), ORDERS.AMOUNT.sumAs("total"))
@@ -476,17 +405,19 @@ public class EdgeCaseTests {
                 .havingRaw("SUM(o.amount) >= ?", new BigDecimal("500"))
                 .havingRaw("COUNT(o.id) >= ?", 5)
                 .build();
-        assertContains(r.sql(), "HAVING SUM(o.amount) >=");
-        assertContains(r.sql(), "AND COUNT(o.id) >=");
+        assertThat(r.sql()).contains("HAVING SUM(o.amount) >=");
+        assertThat(r.sql()).contains("AND COUNT(o.id) >=");
     }
 
+    @Test
     void testNoFrom() {
         SqlResult r = SelectBuilder.query().selectRaw("1 AS one").build();
-        assertEquals("SELECT 1 AS one", r.sql());
+        assertThat(r.sql()).isEqualTo("SELECT 1 AS one");
     }
 
     // ==================== SqlResult ====================
 
+    @Test
     void testPositionalConversion() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -494,13 +425,14 @@ public class EdgeCaseTests {
                 .where(eq(ORDERS.STATUS, "A"), eq(ORDERS.CATEGORY, "B"))
                 .build();
         SqlResult.PositionalQuery pq = r.toPositional();
-        assertNotContains(pq.sql(), ":");
-        assertContains(pq.sql(), "?");
-        assertEquals(2, pq.values().length);
-        assertEquals("A", pq.values()[0]);
-        assertEquals("B", pq.values()[1]);
+        assertThat(pq.sql()).doesNotContain(":");
+        assertThat(pq.sql()).contains("?");
+        assertThat(pq.values().length).isEqualTo(2);
+        assertThat(pq.values()[0]).isEqualTo("A");
+        assertThat(pq.values()[1]).isEqualTo("B");
     }
 
+    @Test
     void testVerifyValid() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -510,6 +442,7 @@ public class EdgeCaseTests {
         r.verify(); // should not throw
     }
 
+    @Test
     void testDebugStringTypes() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -520,23 +453,25 @@ public class EdgeCaseTests {
                 )
                 .build();
         String debug = r.toDebugString();
-        assertContains(debug, "'ACTIVE'");   // string quoted
-        assertContains(debug, "99");          // number not quoted
-        assertNotContains(debug, "'99'");     // number should NOT be quoted
+        assertThat(debug).contains("'ACTIVE'");   // string quoted
+        assertThat(debug).contains("99");          // number not quoted
+        assertThat(debug).doesNotContain("'99'");  // number should NOT be quoted
     }
 
     // ==================== ParameterBinder ====================
 
+    @Test
     void testBinderUniqueness() {
         ParameterBinder binder = new ParameterBinder();
         String p1 = binder.bind("A", "status");
         String p2 = binder.bind("B", "status");
-        assertNotEquals(p1, p2);
-        assertEquals(2, binder.getParameters().size());
+        assertThat(p1).isNotEqualTo(p2);
+        assertThat(binder.getParameters().size()).isEqualTo(2);
     }
 
     // ==================== UnionBuilder ====================
 
+    @Test
     void testUnionNotAll() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder)
@@ -546,10 +481,11 @@ public class EdgeCaseTests {
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(eq(ORDERS.STATUS, "B")).build();
         SqlResult r = UnionBuilder.create(binder).union(q1).union(q2).build();
-        assertContains(r.sql(), " UNION ");
-        assertNotContains(r.sql(), "UNION ALL");
+        assertThat(r.sql()).contains(" UNION ");
+        assertThat(r.sql()).doesNotContain("UNION ALL");
     }
 
+    @Test
     void testTripleUnion() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder)
@@ -565,12 +501,13 @@ public class EdgeCaseTests {
                 .unionAll(q1).unionAll(q2).unionAll(q3).build();
         // Should have two UNION ALL separators
         int count = countOccurrences(r.sql(), "UNION ALL");
-        assertEquals(2, count);
-        assertEquals(3, r.namedParameters().size());
+        assertThat(count).isEqualTo(2);
+        assertThat(r.namedParameters().size()).isEqualTo(3);
     }
 
     // ==================== CTE ====================
 
+    @Test
     void testMultipleCtes() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult cte1 = SelectBuilder.subquery(binder)
@@ -589,12 +526,13 @@ public class EdgeCaseTests {
                 .select(CUSTOMERS.ID.ref())
                 .from(CUSTOMERS)
                 .build();
-        assertContains(r.sql(), "WITH active_customers AS (");
-        assertContains(r.sql(), ", paid_orders AS (");
+        assertThat(r.sql()).contains("WITH active_customers AS (");
+        assertThat(r.sql()).contains(", paid_orders AS (");
     }
 
     // ==================== Thread safety ====================
 
+    @Test
     void testConcurrentBuilds() {
         int threads = 10;
         ExecutorService exec = Executors.newFixedThreadPool(threads);
@@ -623,110 +561,119 @@ public class EdgeCaseTests {
         try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         exec.shutdown();
 
-        assertEquals(0, errors.get());
-        assertEquals(threads, results.size());
+        assertThat(errors.get()).isEqualTo(0);
+        assertThat(results.size()).isEqualTo(threads);
         // Each result should contain only its own status
         for (int i = 0; i < threads; i++) {
             String status = "STATUS_" + i;
             String debug = results.get(status);
-            assertContains(debug, "'" + status + "'");
+            assertThat(debug).contains("'" + status + "'");
             // Must not contain any other status
             for (int j = 0; j < threads; j++) {
                 if (j != i) {
-                    assertNotContains(debug, "STATUS_" + j);
+                    assertThat(debug).doesNotContain("STATUS_" + j);
                 }
             }
         }
     }
 
-
     // ==================== IN list ====================
 
+    @Test
     void testInListMultipleValues() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .where(in(ORDERS.STATUS, List.of("A", "B", "C")))
                 .build();
-        assertContains(r.sql(), "o.status IN (");
-        assertEquals(3, r.namedParameters().size());
+        assertThat(r.sql()).contains("o.status IN (");
+        assertThat(r.namedParameters().size()).isEqualTo(3);
     }
 
     // ==================== LIKE ====================
 
+    @Test
     void testLike() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(like(ORDERS.STATUS, "PEN%")).build();
-        assertContains(r.sql(), "o.status LIKE");
+        assertThat(r.sql()).contains("o.status LIKE");
     }
 
+    @Test
     void testNotLike() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(notLike(ORDERS.STATUS, "CAN%")).build();
-        assertContains(r.sql(), "o.status NOT LIKE");
+        assertThat(r.sql()).contains("o.status NOT LIKE");
     }
 
+    @Test
     void testContains() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(contains(ORDERS.STATUS, "END")).build();
         // The bound value should be %END%
-        assertTrue(r.namedParameters().values().stream()
-                        .anyMatch(v -> "%END%".equals(v)),
-                "Should bind %END%");
+        assertThat(r.namedParameters().values().stream()
+                .anyMatch(v -> "%END%".equals(v)))
+                .as("Should bind %END%").isTrue();
     }
 
+    @Test
     void testStartsWith() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(startsWith(ORDERS.STATUS, "PEN")).build();
-        assertTrue(r.namedParameters().values().stream()
-                        .anyMatch(v -> "PEN%".equals(v)),
-                "Should bind PEN%");
+        assertThat(r.namedParameters().values().stream()
+                .anyMatch(v -> "PEN%".equals(v)))
+                .as("Should bind PEN%").isTrue();
     }
 
     // ==================== IS NULL ====================
 
+    @Test
     void testIsNull() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(isNull(ORDERS.CATEGORY)).build();
-        assertContains(r.sql(), "o.category IS NULL");
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).contains("o.category IS NULL");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testIsNotNull() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(isNotNull(ORDERS.CATEGORY)).build();
-        assertContains(r.sql(), "o.category IS NOT NULL");
+        assertThat(r.sql()).contains("o.category IS NOT NULL");
     }
 
     // ==================== NOT IN ====================
 
+    @Test
     void testNotIn() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(notIn(ORDERS.STATUS, List.of("X", "Y"))).build();
-        assertContains(r.sql(), "o.status NOT IN (");
+        assertThat(r.sql()).contains("o.status NOT IN (");
     }
 
     // ==================== Raw with params ====================
 
+    @Test
     void testRawWithParams() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(raw("o.amount BETWEEN ? AND ?",
                         new BigDecimal("100"), new BigDecimal("500")))
                 .build();
-        assertContains(r.sql(), "o.amount BETWEEN :raw_");
-        assertEquals(2, r.namedParameters().size());
+        assertThat(r.sql()).contains("o.amount BETWEEN :raw_");
+        assertThat(r.namedParameters().size()).isEqualTo(2);
     }
 
     // ==================== NOT EXISTS ====================
 
+    @Test
     void testNotExists() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult sub = SelectBuilder.subquery(binder)
@@ -735,19 +682,21 @@ public class EdgeCaseTests {
         SqlResult r = SelectBuilder.subquery(binder)
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .where(notExists(sub)).build();
-        assertContains(r.sql(), "NOT EXISTS (");
+        assertThat(r.sql()).contains("NOT EXISTS (");
     }
 
     // ==================== Column conditions ====================
 
+    @Test
     void testEqColumn() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref()).from(ORDERS)
                 .innerJoin(CUSTOMERS, ORDERS.CUSTOMER_ID, CUSTOMERS.ID)
                 .where(eqColumn(ORDERS.CUSTOMER_ID, CUSTOMERS.ID)).build();
-        assertContains(r.sql(), "o.customer_id = c.id");
+        assertThat(r.sql()).contains("o.customer_id = c.id");
     }
 
+    @Test
     void testColumnOpGt() {
         OrderTable o2 = ORDERS.as("o2");
         SqlResult r = SelectBuilder.query()
@@ -755,7 +704,7 @@ public class EdgeCaseTests {
                 .innerJoin(o2, ORDERS.CUSTOMER_ID, o2.CUSTOMER_ID)
                 .where(columnOp(ORDERS.AMOUNT, ComparisonOp.GT, o2.AMOUNT))
                 .build();
-        assertContains(r.sql(), "o.amount > o2.amount");
+        assertThat(r.sql()).contains("o.amount > o2.amount");
     }
 
     // ==================== Helpers ====================
@@ -768,60 +717,5 @@ public class EdgeCaseTests {
             idx += sub.length();
         }
         return count;
-    }
-
-    private void test(String name, Runnable test) {
-        try {
-            test.run();
-            System.out.println("  \u2713 " + name);
-            passed++;
-        } catch (AssertionError | Exception e) {
-            System.out.println("  \u2717 " + name + " -> " + e.getMessage());
-            failed++;
-        }
-    }
-
-    private void assertEquals(Object expected, Object actual) {
-        if (!expected.equals(actual)) {
-            throw new AssertionError("Expected " + expected + " but got " + actual);
-        }
-    }
-
-    private void assertNotEquals(Object a, Object b) {
-        if (a.equals(b)) {
-            throw new AssertionError("Expected values to differ but both were: " + a);
-        }
-    }
-
-    private void assertTrue(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-    }
-
-    private void assertNull(Object obj) {
-        if (obj != null) throw new AssertionError("Expected null but got: " + obj);
-    }
-
-    private void assertContains(String haystack, String needle) {
-        if (!haystack.contains(needle)) {
-            throw new AssertionError("Expected to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private void assertNotContains(String haystack, String needle) {
-        if (haystack.contains(needle)) {
-            throw new AssertionError("Expected NOT to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private <T extends Throwable> void assertThrows(Class<T> type, Runnable action) {
-        try {
-            action.run();
-            throw new AssertionError("Expected " + type.getSimpleName() + " but no exception thrown");
-        } catch (Throwable t) {
-            if (!type.isInstance(t)) {
-                throw new AssertionError("Expected " + type.getSimpleName()
-                        + " but got " + t.getClass().getSimpleName() + ": " + t.getMessage());
-            }
-        }
     }
 }

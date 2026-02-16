@@ -8,134 +8,104 @@ import com.enterprise.batch.sql.expression.CaseExpression;
 import com.enterprise.batch.sql.expression.Cases;
 import com.enterprise.batch.sql.expression.SimpleCaseExpression;
 import com.enterprise.batch.sql.param.ParameterBinder;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
 import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
+import static org.assertj.core.api.Assertions.*;
 
 /**
  * Tests for arithmetic SET expressions and CASE expressions.
  */
-public class ArithmeticAndCaseTests {
-
-    private int passed = 0;
-    private int failed = 0;
-
-    public static void main(String[] args) {
-        ArithmeticAndCaseTests t = new ArithmeticAndCaseTests();
-        t.runAll();
-    }
-
-    public void runAll() {
-        System.out.println("=== Running Arithmetic & CASE Tests ===\n");
-
-        // Arithmetic SET
-        test("Arithmetic: setAdd", this::testSetAdd);
-        test("Arithmetic: setSubtract", this::testSetSubtract);
-        test("Arithmetic: setMultiply", this::testSetMultiply);
-        test("Arithmetic: setDivide", this::testSetDivide);
-        test("Arithmetic: setColumnExpr", this::testSetColumnExpr);
-        test("Arithmetic: with WHERE", this::testArithmeticWithWhere);
-        test("Arithmetic: buildTemplate", this::testArithmeticBuildTemplate);
-        test("Arithmetic: columnExpr buildTemplate", this::testColumnExprBuildTemplate);
-        test("Arithmetic: in MERGE", this::testArithmeticInMerge);
-        test("Arithmetic: mixed SET clauses", this::testMixedSetClauses);
-
-        // CASE expressions
-        test("CASE: searched", this::testSearchedCase);
-        test("CASE: simple", this::testSimpleCase);
-        test("CASE: with alias", this::testCaseWithAlias);
-        test("CASE: no ELSE", this::testCaseNoElse);
-        test("CASE: in SELECT", this::testCaseInSelect);
-        test("CASE: in UPDATE SET", this::testCaseInUpdateSet);
-        test("CASE: in ORDER BY", this::testCaseInOrderBy);
-        test("CASE: multiple WHENs", this::testCaseMultipleWhens);
-        test("CASE: with composite conditions", this::testCaseWithConditions);
-        test("CASE: parameterization", this::testCaseParameterization);
-        test("CASE: in MERGE", this::testCaseInMerge);
-        test("SELECT: list refactor", this::testSelectListRefactor);
-
-        System.out.println("\n=== Arithmetic & CASE Results: " + passed + " passed, " + failed + " failed ===");
-        if (failed > 0) System.exit(1);
-    }
+class ArithmeticAndCaseTests {
 
     // ==================== Arithmetic SET Tests ====================
 
+    @Test
     void testSetAdd() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setAdd(ORDERS.AMOUNT, BigDecimal.TEN)
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "amount = amount + :amount_1");
+        assertThat(r.sql()).contains("amount = amount + :amount_1");
     }
 
+    @Test
     void testSetSubtract() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setSubtract(ORDERS.AMOUNT, BigDecimal.ONE)
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "amount = amount - :amount_1");
+        assertThat(r.sql()).contains("amount = amount - :amount_1");
     }
 
+    @Test
     void testSetMultiply() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setMultiply(ORDERS.AMOUNT, BigDecimal.valueOf(2))
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "amount = amount * :amount_1");
+        assertThat(r.sql()).contains("amount = amount * :amount_1");
     }
 
+    @Test
     void testSetDivide() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setDivide(ORDERS.AMOUNT, BigDecimal.valueOf(2))
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "amount = amount / :amount_1");
+        assertThat(r.sql()).contains("amount = amount / :amount_1");
     }
 
+    @Test
     void testSetColumnExpr() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setColumnExpr(ORDERS.AMOUNT, ORDERS.CUSTOMER_ID, ArithmeticOp.MULTIPLY, ORDERS.PRODUCT_ID)
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "amount = customer_id * product_id");
-        assertEquals(1, r.namedParameters().size()); // only WHERE param
+        assertThat(r.sql()).contains("amount = customer_id * product_id");
+        assertThat(r.namedParameters().size()).isEqualTo(1); // only WHERE param
     }
 
+    @Test
     void testArithmeticWithWhere() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setAdd(ORDERS.AMOUNT, BigDecimal.valueOf(50))
                 .where(eq(ORDERS.STATUS, "PENDING"), gt(ORDERS.AMOUNT, BigDecimal.ZERO))
                 .build();
-        assertContains(r.sql(), "SET amount = amount + :amount_1");
-        assertContains(r.sql(), "WHERE o.status = :status_2 AND o.amount > :amount_3");
+        assertThat(r.sql()).contains("SET amount = amount + :amount_1");
+        assertThat(r.sql()).contains("WHERE o.status = :status_2 AND o.amount > :amount_3");
     }
 
+    @Test
     void testArithmeticBuildTemplate() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setAdd(ORDERS.AMOUNT, BigDecimal.ONE)
                 .buildTemplate();
-        assertEquals("UPDATE orders o SET amount = amount + :amount", r.sql());
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).isEqualTo("UPDATE orders o SET amount = amount + :amount");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testColumnExprBuildTemplate() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .setColumnExpr(ORDERS.AMOUNT, ORDERS.CUSTOMER_ID, ArithmeticOp.MULTIPLY, ORDERS.PRODUCT_ID)
                 .buildTemplate();
-        assertEquals("UPDATE orders o SET amount = customer_id * product_id", r.sql());
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).isEqualTo("UPDATE orders o SET amount = customer_id * product_id");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testArithmeticInMerge() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -146,9 +116,10 @@ public class ArithmeticAndCaseTests {
                 .whenMatchedSetAdd(ORDERS.AMOUNT, BigDecimal.valueOf(100))
                 .whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT)
                 .build();
-        assertContains(r.sql(), "o.amount = o.amount + :amount_");
+        assertThat(r.sql()).contains("o.amount = o.amount + :amount_");
     }
 
+    @Test
     void testMixedSetClauses() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
@@ -156,24 +127,26 @@ public class ArithmeticAndCaseTests {
                 .setAdd(ORDERS.AMOUNT, BigDecimal.valueOf(10))
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "status = :status_1");
-        assertContains(r.sql(), "amount = amount + :amount_2");
+        assertThat(r.sql()).contains("status = :status_1");
+        assertThat(r.sql()).contains("amount = amount + :amount_2");
     }
 
     // ==================== CASE Expression Tests ====================
 
+    @Test
     void testSearchedCase() {
         ParameterBinder binder = new ParameterBinder();
         CaseExpression c = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("High")
                 .when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(100))).then("Medium")
                 .orElse("Low");
         String sql = c.toSql(binder);
-        assertContains(sql, "CASE WHEN o.amount > :amount_1 THEN :case_2");
-        assertContains(sql, "WHEN o.amount > :amount_3 THEN :case_4");
-        assertContains(sql, "ELSE :case_5 END");
-        assertEquals(5, binder.getParameters().size());
+        assertThat(sql).contains("CASE WHEN o.amount > :amount_1 THEN :case_2");
+        assertThat(sql).contains("WHEN o.amount > :amount_3 THEN :case_4");
+        assertThat(sql).contains("ELSE :case_5 END");
+        assertThat(binder.getParameters().size()).isEqualTo(5);
     }
 
+    @Test
     void testSimpleCase() {
         ParameterBinder binder = new ParameterBinder();
         SimpleCaseExpression c = Cases.of(ORDERS.STATUS)
@@ -181,32 +154,35 @@ public class ArithmeticAndCaseTests {
                 .when("B").then("Blocked")
                 .orElse("Unknown");
         String sql = c.toSql(binder);
-        assertContains(sql, "CASE o.status");
-        assertContains(sql, "WHEN :status_1 THEN :case_2");
-        assertContains(sql, "WHEN :status_3 THEN :case_4");
-        assertContains(sql, "ELSE :case_5 END");
-        assertEquals(5, binder.getParameters().size());
+        assertThat(sql).contains("CASE o.status");
+        assertThat(sql).contains("WHEN :status_1 THEN :case_2");
+        assertThat(sql).contains("WHEN :status_3 THEN :case_4");
+        assertThat(sql).contains("ELSE :case_5 END");
+        assertThat(binder.getParameters().size()).isEqualTo(5);
     }
 
+    @Test
     void testCaseWithAlias() {
         ParameterBinder binder = new ParameterBinder();
         CaseExpression c = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("High")
                 .orElse("Low")
                 .as("tier");
         String sql = c.toSql(binder);
-        assertContains(sql, "END AS tier");
+        assertThat(sql).contains("END AS tier");
     }
 
+    @Test
     void testCaseNoElse() {
         ParameterBinder binder = new ParameterBinder();
         CaseExpression c = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("High")
                 .end();
         String sql = c.toSql(binder);
-        assertContains(sql, "CASE WHEN");
-        assertContains(sql, "END");
-        assertNotContains(sql, "ELSE");
+        assertThat(sql).contains("CASE WHEN");
+        assertThat(sql).contains("END");
+        assertThat(sql).doesNotContain("ELSE");
     }
 
+    @Test
     void testCaseInSelect() {
         CaseExpression caseExpr = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("High")
                 .orElse("Low")
@@ -216,10 +192,11 @@ public class ArithmeticAndCaseTests {
                 .selectExpr(caseExpr)
                 .from(ORDERS)
                 .build();
-        assertContains(r.sql(), "SELECT o.id, CASE WHEN");
-        assertContains(r.sql(), "END AS tier");
+        assertThat(r.sql()).contains("SELECT o.id, CASE WHEN");
+        assertThat(r.sql()).contains("END AS tier");
     }
 
+    @Test
     void testCaseInUpdateSet() {
         CaseExpression caseExpr = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("HIGH")
                 .orElse("LOW");
@@ -228,10 +205,11 @@ public class ArithmeticAndCaseTests {
                 .setCase(ORDERS.CATEGORY, caseExpr)
                 .where(eq(ORDERS.ID, 1L))
                 .build();
-        assertContains(r.sql(), "category = CASE WHEN");
-        assertContains(r.sql(), "END");
+        assertThat(r.sql()).contains("category = CASE WHEN");
+        assertThat(r.sql()).contains("END");
     }
 
+    @Test
     void testCaseInOrderBy() {
         CaseExpression caseExpr = Cases.when(eq(ORDERS.STATUS, "URGENT")).then(1)
                 .when(eq(ORDERS.STATUS, "NORMAL")).then(2)
@@ -241,10 +219,11 @@ public class ArithmeticAndCaseTests {
                 .from(ORDERS)
                 .orderByExpr(caseExpr, SortDirection.ASC)
                 .build();
-        assertContains(r.sql(), "ORDER BY CASE WHEN");
-        assertContains(r.sql(), "ASC");
+        assertThat(r.sql()).contains("ORDER BY CASE WHEN");
+        assertThat(r.sql()).contains("ASC");
     }
 
+    @Test
     void testCaseMultipleWhens() {
         ParameterBinder binder = new ParameterBinder();
         CaseExpression c = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(10000))).then("Platinum")
@@ -254,9 +233,10 @@ public class ArithmeticAndCaseTests {
         String sql = c.toSql(binder);
         // 3 WHEN branches
         int count = sql.split("WHEN").length - 1;
-        assertEquals(3, count);
+        assertThat(count).isEqualTo(3);
     }
 
+    @Test
     void testCaseWithConditions() {
         ParameterBinder binder = new ParameterBinder();
         CaseExpression c = Cases.when(
@@ -264,20 +244,22 @@ public class ArithmeticAndCaseTests {
                 .then("Premium")
                 .orElse("Standard");
         String sql = c.toSql(binder);
-        assertContains(sql, "AND");
+        assertThat(sql).contains("AND");
     }
 
+    @Test
     void testCaseParameterization() {
         ParameterBinder binder = new ParameterBinder();
         CaseExpression c = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(100))).then("A")
                 .orElse("B");
         String sql = c.toSql(binder);
         // All values parameterized, none inlined
-        assertNotContains(sql, "'A'");
-        assertNotContains(sql, "'B'");
-        assertEquals(3, binder.getParameters().size());
+        assertThat(sql).doesNotContain("'A'");
+        assertThat(sql).doesNotContain("'B'");
+        assertThat(binder.getParameters().size()).isEqualTo(3);
     }
 
+    @Test
     void testCaseInMerge() {
         CaseExpression caseExpr = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("HIGH")
                 .orElse("LOW");
@@ -290,16 +272,17 @@ public class ArithmeticAndCaseTests {
                 .whenMatchedSetCase(ORDERS.CATEGORY, caseExpr)
                 .whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT)
                 .build();
-        assertContains(r.sql(), "WHEN MATCHED THEN UPDATE SET o.category = CASE WHEN");
+        assertThat(r.sql()).contains("WHEN MATCHED THEN UPDATE SET o.category = CASE WHEN");
     }
 
+    @Test
     void testSelectListRefactor() {
         // select() clears, selectExpr() appends
         SqlResult r1 = SelectBuilder.query()
                 .select(ORDERS.ID.ref(), ORDERS.STATUS.ref())
                 .from(ORDERS)
                 .build();
-        assertContains(r1.sql(), "SELECT o.id, o.status");
+        assertThat(r1.sql()).contains("SELECT o.id, o.status");
 
         // selectExpr appends after select
         CaseExpression caseExpr = Cases.when(eq(ORDERS.STATUS, "A")).then("Active")
@@ -309,7 +292,7 @@ public class ArithmeticAndCaseTests {
                 .selectExpr(caseExpr)
                 .from(ORDERS)
                 .build();
-        assertContains(r2.sql(), "SELECT o.id, CASE");
+        assertThat(r2.sql()).contains("SELECT o.id, CASE");
 
         // select() after selectExpr clears everything
         SqlResult r3 = SelectBuilder.query()
@@ -317,38 +300,7 @@ public class ArithmeticAndCaseTests {
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .build();
-        assertNotContains(r3.sql(), "CASE");
-        assertContains(r3.sql(), "SELECT o.id");
-    }
-
-    // ==================== Helpers ====================
-
-    private void test(String name, Runnable test) {
-        try {
-            test.run();
-            System.out.println("  \u2713 " + name);
-            passed++;
-        } catch (AssertionError | Exception e) {
-            System.out.println("  \u2717 " + name + " -> " + e.getMessage());
-            failed++;
-        }
-    }
-
-    private void assertEquals(Object expected, Object actual) {
-        if (!expected.equals(actual)) {
-            throw new AssertionError("Expected " + expected + " but got " + actual);
-        }
-    }
-
-    private void assertContains(String haystack, String needle) {
-        if (!haystack.contains(needle)) {
-            throw new AssertionError("Expected to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private void assertNotContains(String haystack, String needle) {
-        if (haystack.contains(needle)) {
-            throw new AssertionError("Expected NOT to contain '" + needle + "' in:\n  " + haystack);
-        }
+        assertThat(r3.sql()).doesNotContain("CASE");
+        assertThat(r3.sql()).contains("SELECT o.id");
     }
 }

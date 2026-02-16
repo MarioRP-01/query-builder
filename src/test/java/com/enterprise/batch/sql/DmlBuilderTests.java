@@ -6,78 +6,24 @@ import com.enterprise.batch.sql.param.ParameterBinder;
 import com.enterprise.batch.spring.BatchDmlProvider;
 import com.enterprise.batch.spring.DmlProviderRegistry;
 
+import org.junit.jupiter.api.Test;
+
 import java.math.BigDecimal;
 import java.util.Map;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
 import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
 import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static org.assertj.core.api.Assertions.*;
 
 /**
  * Tests for DML builders (INSERT, UPDATE, DELETE, MERGE) and Spring integration.
  */
 public class DmlBuilderTests {
 
-    private int passed = 0;
-    private int failed = 0;
-
-    public static void main(String[] args) {
-        DmlBuilderTests t = new DmlBuilderTests();
-        t.runAll();
-    }
-
-    public void runAll() {
-        System.out.println("=== Running DML Builder Tests ===\n");
-
-        // InsertBuilder
-        test("Insert: single row with columns/values", this::testInsertSingleRow);
-        test("Insert: multi-row INSERT ALL", this::testInsertMultiRow);
-        test("Insert: set() API", this::testInsertSetApi);
-        test("Insert: null handling (valuesOrNull)", this::testInsertNullHandling);
-        test("Insert: values() rejects null", this::testInsertValuesRejectsNull);
-        test("Insert: template mode", this::testInsertTemplate);
-        test("Insert: column count mismatch throws", this::testInsertColumnMismatch);
-        test("Insert: insertFrom (SELECT)", this::testInsertFrom);
-        test("Insert: returning clause", this::testInsertReturning);
-
-        // UpdateBuilder
-        test("Update: basic SET + WHERE", this::testUpdateBasic);
-        test("Update: setIfPresent skips null", this::testUpdateSetIfPresent);
-        test("Update: setNull explicit", this::testUpdateSetNull);
-        test("Update: setSubquery", this::testUpdateSetSubquery);
-        test("Update: missing WHERE throws", this::testUpdateMissingWhereThrows);
-        test("Update: unconditional", this::testUpdateUnconditional);
-        test("Update: template mode", this::testUpdateTemplate);
-        test("Update: returning clause", this::testUpdateReturning);
-
-        // DeleteBuilder
-        test("Delete: basic with condition", this::testDeleteBasic);
-        test("Delete: composite conditions", this::testDeleteCompositeCondition);
-        test("Delete: missing WHERE throws", this::testDeleteMissingWhereThrows);
-        test("Delete: unconditional", this::testDeleteUnconditional);
-        test("Delete: returning clause", this::testDeleteReturning);
-
-        // MergeBuilder
-        test("Merge: DUAL source upsert", this::testMergeDualSource);
-        test("Merge: subquery source", this::testMergeSubquerySource);
-        test("Merge: matched-only (update)", this::testMergeMatchedOnly);
-        test("Merge: not-matched-only (insert)", this::testMergeNotMatchedOnly);
-        test("Merge: both matched + not-matched", this::testMergeBoth);
-        test("Merge: multi-key ON", this::testMergeMultiKeyOn);
-        test("Merge: whenMatchedDelete", this::testMergeMatchedDelete);
-        test("Merge: whenMatchedSet literal", this::testMergeMatchedSetLiteral);
-
-        // Spring
-        test("DmlProviderRegistry: register + get", this::testRegistryRoundtrip);
-        test("DmlProviderRegistry: unknown throws", this::testRegistryUnknownThrows);
-        test("DmlProviderRegistry: all() unmodifiable", this::testRegistryAllUnmodifiable);
-
-        System.out.println("\n=== DML Builder Results: " + passed + " passed, " + failed + " failed ===");
-        if (failed > 0) System.exit(1);
-    }
-
     // ==================== InsertBuilder Tests ====================
 
+    @Test
     void testInsertSingleRow() {
         SqlResult r = InsertBuilder.insert()
                 .into(ORDERS)
@@ -85,14 +31,15 @@ public class DmlBuilderTests {
                 .values(1001L, "PENDING")
                 .build();
 
-        assertContains(r.sql(), "INSERT INTO orders");
-        assertContains(r.sql(), "(id, status)");
-        assertContains(r.sql(), "VALUES (");
-        assertEquals(2, r.namedParameters().size());
-        assertContains(r.toDebugString(), "1001");
-        assertContains(r.toDebugString(), "'PENDING'");
+        assertThat(r.sql()).contains("INSERT INTO orders");
+        assertThat(r.sql()).contains("(id, status)");
+        assertThat(r.sql()).contains("VALUES (");
+        assertThat(r.namedParameters().size()).isEqualTo(2);
+        assertThat(r.toDebugString()).contains("1001");
+        assertThat(r.toDebugString()).contains("'PENDING'");
     }
 
+    @Test
     void testInsertMultiRow() {
         SqlResult r = InsertBuilder.insert()
                 .into(ORDERS)
@@ -102,15 +49,16 @@ public class DmlBuilderTests {
                 .values(3L, "C")
                 .build();
 
-        assertContains(r.sql(), "INSERT ALL");
-        assertContains(r.sql(), "SELECT 1 FROM DUAL");
+        assertThat(r.sql()).contains("INSERT ALL");
+        assertThat(r.sql()).contains("SELECT 1 FROM DUAL");
         // 3 rows x 2 columns = 6 params
-        assertEquals(6, r.namedParameters().size());
+        assertThat(r.namedParameters().size()).isEqualTo(6);
         // Should have 3 INTO clauses
         int count = r.sql().split(" INTO ").length - 1;
-        assertEquals(3, count);
+        assertThat(count).isEqualTo(3);
     }
 
+    @Test
     void testInsertSetApi() {
         SqlResult r = InsertBuilder.insert()
                 .into(ORDERS)
@@ -119,11 +67,12 @@ public class DmlBuilderTests {
                 .set(ORDERS.AMOUNT, BigDecimal.TEN)
                 .build();
 
-        assertContains(r.sql(), "INSERT INTO orders");
-        assertContains(r.sql(), "id, status, amount");
-        assertEquals(3, r.namedParameters().size());
+        assertThat(r.sql()).contains("INSERT INTO orders");
+        assertThat(r.sql()).contains("id, status, amount");
+        assertThat(r.namedParameters().size()).isEqualTo(3);
     }
 
+    @Test
     void testInsertNullHandling() {
         SqlResult r = InsertBuilder.insert()
                 .into(ORDERS)
@@ -131,37 +80,42 @@ public class DmlBuilderTests {
                 .valuesOrNull(1L, null)
                 .build();
 
-        assertContains(r.sql(), "NULL");
-        assertEquals(1, r.namedParameters().size()); // only the non-null id is bound
+        assertThat(r.sql()).contains("NULL");
+        assertThat(r.namedParameters().size()).isEqualTo(1); // only the non-null id is bound
     }
 
+    @Test
     void testInsertValuesRejectsNull() {
-        assertThrows(NullPointerException.class, () ->
+        assertThatThrownBy(() ->
                 InsertBuilder.insert()
                         .into(ORDERS)
                         .columns(ORDERS.ID, ORDERS.STATUS)
-                        .values(1L, null));
+                        .values(1L, null))
+                .isInstanceOf(NullPointerException.class);
     }
 
+    @Test
     void testInsertTemplate() {
         SqlResult r = InsertBuilder.insert()
                 .into(ORDERS)
                 .columns(ORDERS.ID, ORDERS.AMOUNT, ORDERS.STATUS)
                 .buildTemplate();
 
-        assertEquals("INSERT INTO orders (id, amount, status) VALUES (:id, :amount, :status)",
-                r.sql());
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).isEqualTo("INSERT INTO orders (id, amount, status) VALUES (:id, :amount, :status)");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testInsertColumnMismatch() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThatThrownBy(() ->
                 InsertBuilder.insert()
                         .into(ORDERS)
                         .columns(ORDERS.ID, ORDERS.STATUS)
-                        .values(1L)); // only 1 value for 2 columns
+                        .values(1L)) // only 1 value for 2 columns
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testInsertFrom() {
         SqlResult selectResult = SelectBuilder.query()
                 .select(ORDERS.ID.ref(), ORDERS.STATUS.ref())
@@ -175,12 +129,13 @@ public class DmlBuilderTests {
                 .insertFrom(selectResult)
                 .build();
 
-        assertContains(r.sql(), "INSERT INTO customers");
-        assertContains(r.sql(), "(id, name)");
-        assertContains(r.sql(), "SELECT");
-        assertContains(r.sql(), "FROM orders");
+        assertThat(r.sql()).contains("INSERT INTO customers");
+        assertThat(r.sql()).contains("(id, name)");
+        assertThat(r.sql()).contains("SELECT");
+        assertThat(r.sql()).contains("FROM orders");
     }
 
+    @Test
     void testInsertReturning() {
         SqlResult r = InsertBuilder.insert()
                 .into(ORDERS)
@@ -189,11 +144,12 @@ public class DmlBuilderTests {
                 .returning(ORDERS.ID)
                 .build();
 
-        assertContains(r.sql(), "RETURNING id INTO :id");
+        assertThat(r.sql()).contains("RETURNING id INTO :id");
     }
 
     // ==================== UpdateBuilder Tests ====================
 
+    @Test
     void testUpdateBasic() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
@@ -202,13 +158,14 @@ public class DmlBuilderTests {
                 .where(eq(ORDERS.ID, 1001L))
                 .build();
 
-        assertContains(r.sql(), "UPDATE orders o SET");
-        assertContains(r.sql(), "amount = ");
-        assertContains(r.sql(), "status = ");
-        assertContains(r.sql(), "WHERE o.id = ");
-        assertEquals(3, r.namedParameters().size());
+        assertThat(r.sql()).contains("UPDATE orders o SET");
+        assertThat(r.sql()).contains("amount = ");
+        assertThat(r.sql()).contains("status = ");
+        assertThat(r.sql()).contains("WHERE o.id = ");
+        assertThat(r.namedParameters().size()).isEqualTo(3);
     }
 
+    @Test
     void testUpdateSetIfPresent() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
@@ -217,10 +174,11 @@ public class DmlBuilderTests {
                 .where(eq(ORDERS.ID, 1L))
                 .build();
 
-        assertNotContains(r.sql(), "category");
-        assertContains(r.sql(), "status = ");
+        assertThat(r.sql()).doesNotContain("category");
+        assertThat(r.sql()).contains("status = ");
     }
 
+    @Test
     void testUpdateSetNull() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
@@ -228,9 +186,10 @@ public class DmlBuilderTests {
                 .where(eq(ORDERS.ID, 1L))
                 .build();
 
-        assertContains(r.sql(), "category = NULL");
+        assertThat(r.sql()).contains("category = NULL");
     }
 
+    @Test
     void testUpdateSetSubquery() {
         SqlResult subquery = SelectBuilder.query()
                 .select("MAX(c.tier)")
@@ -244,27 +203,31 @@ public class DmlBuilderTests {
                 .where(eq(ORDERS.ID, 1L))
                 .build();
 
-        assertContains(r.sql(), "category = (SELECT MAX(c.tier) FROM customers c");
+        assertThat(r.sql()).contains("category = (SELECT MAX(c.tier) FROM customers c");
     }
 
+    @Test
     void testUpdateMissingWhereThrows() {
-        assertThrows(IllegalStateException.class, () ->
+        assertThatThrownBy(() ->
                 UpdateBuilder.update()
                         .table(ORDERS)
                         .set(ORDERS.STATUS, "X")
-                        .build());
+                        .build())
+                .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
     void testUpdateUnconditional() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
                 .set(ORDERS.STATUS, "ARCHIVED")
                 .buildUnconditional();
 
-        assertContains(r.sql(), "UPDATE orders o SET");
-        assertNotContains(r.sql(), "WHERE");
+        assertThat(r.sql()).contains("UPDATE orders o SET");
+        assertThat(r.sql()).doesNotContain("WHERE");
     }
 
+    @Test
     void testUpdateTemplate() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
@@ -272,10 +235,11 @@ public class DmlBuilderTests {
                 .set(ORDERS.STATUS, "X")              // value ignored in template
                 .buildTemplate();
 
-        assertEquals("UPDATE orders o SET amount = :amount, status = :status", r.sql());
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).isEqualTo("UPDATE orders o SET amount = :amount, status = :status");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testUpdateReturning() {
         SqlResult r = UpdateBuilder.update()
                 .table(ORDERS)
@@ -284,22 +248,24 @@ public class DmlBuilderTests {
                 .returning(ORDERS.ID, ORDERS.STATUS)
                 .build();
 
-        assertContains(r.sql(), "RETURNING id, status INTO :id, :status");
+        assertThat(r.sql()).contains("RETURNING id, status INTO :id, :status");
     }
 
     // ==================== DeleteBuilder Tests ====================
 
+    @Test
     void testDeleteBasic() {
         SqlResult r = DeleteBuilder.delete()
                 .from(ORDERS)
                 .where(eq(ORDERS.STATUS, "CANCELLED"))
                 .build();
 
-        assertContains(r.sql(), "DELETE FROM orders o");
-        assertContains(r.sql(), "WHERE o.status = ");
-        assertEquals(1, r.namedParameters().size());
+        assertThat(r.sql()).contains("DELETE FROM orders o");
+        assertThat(r.sql()).contains("WHERE o.status = ");
+        assertThat(r.namedParameters().size()).isEqualTo(1);
     }
 
+    @Test
     void testDeleteCompositeCondition() {
         SqlResult r = DeleteBuilder.delete()
                 .from(ORDERS)
@@ -308,27 +274,31 @@ public class DmlBuilderTests {
                         eq(ORDERS.STATUS, "EXPIRED")))
                 .build();
 
-        assertContains(r.sql(), "DELETE FROM orders o WHERE");
-        assertContains(r.sql(), "OR");
-        assertEquals(2, r.namedParameters().size());
+        assertThat(r.sql()).contains("DELETE FROM orders o WHERE");
+        assertThat(r.sql()).contains("OR");
+        assertThat(r.namedParameters().size()).isEqualTo(2);
     }
 
+    @Test
     void testDeleteMissingWhereThrows() {
-        assertThrows(IllegalStateException.class, () ->
+        assertThatThrownBy(() ->
                 DeleteBuilder.delete()
                         .from(ORDERS)
-                        .build());
+                        .build())
+                .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
     void testDeleteUnconditional() {
         SqlResult r = DeleteBuilder.delete()
                 .from(ORDERS)
                 .buildUnconditional();
 
-        assertEquals("DELETE FROM orders o", r.sql());
-        assertEquals(0, r.namedParameters().size());
+        assertThat(r.sql()).isEqualTo("DELETE FROM orders o");
+        assertThat(r.namedParameters().size()).isEqualTo(0);
     }
 
+    @Test
     void testDeleteReturning() {
         SqlResult r = DeleteBuilder.delete()
                 .from(ORDERS)
@@ -336,11 +306,12 @@ public class DmlBuilderTests {
                 .returning(ORDERS.ID)
                 .build();
 
-        assertContains(r.sql(), "RETURNING id INTO :id");
+        assertThat(r.sql()).contains("RETURNING id INTO :id");
     }
 
     // ==================== MergeBuilder Tests ====================
 
+    @Test
     void testMergeDualSource() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -352,14 +323,15 @@ public class DmlBuilderTests {
                 .whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT)
                 .build();
 
-        assertContains(r.sql(), "MERGE INTO orders o");
-        assertContains(r.sql(), "USING (SELECT");
-        assertContains(r.sql(), "FROM DUAL) src");
-        assertContains(r.sql(), "ON (o.id = src.id)");
-        assertContains(r.sql(), "WHEN MATCHED THEN UPDATE SET o.amount = src.amount");
-        assertContains(r.sql(), "WHEN NOT MATCHED THEN INSERT (id, amount) VALUES (src.id, src.amount)");
+        assertThat(r.sql()).contains("MERGE INTO orders o");
+        assertThat(r.sql()).contains("USING (SELECT");
+        assertThat(r.sql()).contains("FROM DUAL) src");
+        assertThat(r.sql()).contains("ON (o.id = src.id)");
+        assertThat(r.sql()).contains("WHEN MATCHED THEN UPDATE SET o.amount = src.amount");
+        assertThat(r.sql()).contains("WHEN NOT MATCHED THEN INSERT (id, amount) VALUES (src.id, src.amount)");
     }
 
+    @Test
     void testMergeSubquerySource() {
         SqlResult subquery = SelectBuilder.query()
                 .select(CUSTOMERS.ID.ref(), CUSTOMERS.NAME.ref())
@@ -374,11 +346,12 @@ public class DmlBuilderTests {
                 .whenMatchedUpdate(ORDERS.STATUS)
                 .build();
 
-        assertContains(r.sql(), "USING (SELECT");
-        assertContains(r.sql(), ") stg");
-        assertContains(r.sql(), "ON (o.id = stg.id)");
+        assertThat(r.sql()).contains("USING (SELECT");
+        assertThat(r.sql()).contains(") stg");
+        assertThat(r.sql()).contains("ON (o.id = stg.id)");
     }
 
+    @Test
     void testMergeMatchedOnly() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -388,10 +361,11 @@ public class DmlBuilderTests {
                 .whenMatchedUpdate(ORDERS.STATUS)
                 .build();
 
-        assertContains(r.sql(), "WHEN MATCHED THEN UPDATE SET");
-        assertNotContains(r.sql(), "WHEN NOT MATCHED");
+        assertThat(r.sql()).contains("WHEN MATCHED THEN UPDATE SET");
+        assertThat(r.sql()).doesNotContain("WHEN NOT MATCHED");
     }
 
+    @Test
     void testMergeNotMatchedOnly() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -401,10 +375,11 @@ public class DmlBuilderTests {
                 .whenNotMatchedInsert(ORDERS.ID, ORDERS.STATUS)
                 .build();
 
-        assertNotContains(r.sql(), "WHEN MATCHED");
-        assertContains(r.sql(), "WHEN NOT MATCHED THEN INSERT");
+        assertThat(r.sql()).doesNotContain("WHEN MATCHED");
+        assertThat(r.sql()).contains("WHEN NOT MATCHED THEN INSERT");
     }
 
+    @Test
     void testMergeBoth() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -415,10 +390,11 @@ public class DmlBuilderTests {
                 .whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT)
                 .build();
 
-        assertContains(r.sql(), "WHEN MATCHED THEN UPDATE SET");
-        assertContains(r.sql(), "WHEN NOT MATCHED THEN INSERT");
+        assertThat(r.sql()).contains("WHEN MATCHED THEN UPDATE SET");
+        assertThat(r.sql()).contains("WHEN NOT MATCHED THEN INSERT");
     }
 
+    @Test
     void testMergeMultiKeyOn() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -429,9 +405,10 @@ public class DmlBuilderTests {
                 .whenMatchedUpdate(ORDERS.STATUS)
                 .build();
 
-        assertContains(r.sql(), "ON (o.id = src.id AND o.customer_id = src.customer_id)");
+        assertThat(r.sql()).contains("ON (o.id = src.id AND o.customer_id = src.customer_id)");
     }
 
+    @Test
     void testMergeMatchedDelete() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -440,9 +417,10 @@ public class DmlBuilderTests {
                 .whenMatchedDelete()
                 .build();
 
-        assertContains(r.sql(), "WHEN MATCHED THEN DELETE");
+        assertThat(r.sql()).contains("WHEN MATCHED THEN DELETE");
     }
 
+    @Test
     void testMergeMatchedSetLiteral() {
         SqlResult r = MergeBuilder.merge()
                 .into(ORDERS)
@@ -454,12 +432,13 @@ public class DmlBuilderTests {
                 .build();
 
         // The STATUS is set to a literal, not from source
-        assertContains(r.sql(), "WHEN MATCHED THEN UPDATE SET o.status = :");
-        assertContains(r.toDebugString(), "'UPDATED'");
+        assertThat(r.sql()).contains("WHEN MATCHED THEN UPDATE SET o.status = :");
+        assertThat(r.toDebugString()).contains("'UPDATED'");
     }
 
     // ==================== Spring Integration Tests ====================
 
+    @Test
     void testRegistryRoundtrip() {
         DmlProviderRegistry registry = new DmlProviderRegistry();
         BatchDmlProvider provider = params -> UpdateBuilder.update()
@@ -468,67 +447,23 @@ public class DmlBuilderTests {
         registry.register("updateStatus", provider);
 
         BatchDmlProvider retrieved = registry.get("updateStatus");
-        assertTrue(retrieved == provider, "Should return same provider instance");
-        assertEquals(1, registry.all().size());
+        assertThat(retrieved == provider).as("Should return same provider instance").isTrue();
+        assertThat(registry.all().size()).isEqualTo(1);
     }
 
+    @Test
     void testRegistryUnknownThrows() {
         DmlProviderRegistry registry = new DmlProviderRegistry();
-        assertThrows(IllegalArgumentException.class, () -> registry.get("nonexistent"));
+        assertThatThrownBy(() -> registry.get("nonexistent"))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
     void testRegistryAllUnmodifiable() {
         DmlProviderRegistry registry = new DmlProviderRegistry();
         registry.register("x", params -> InsertBuilder.insert()
                 .into(ORDERS).set(ORDERS.ID, 1L).build());
-        assertThrows(UnsupportedOperationException.class,
-                () -> registry.all().put("hack", null));
-    }
-
-    // ==================== Helpers ====================
-
-    private void test(String name, Runnable test) {
-        try {
-            test.run();
-            System.out.println("  \u2713 " + name);
-            passed++;
-        } catch (AssertionError | Exception e) {
-            System.out.println("  \u2717 " + name + " -> " + e.getMessage());
-            failed++;
-        }
-    }
-
-    private void assertEquals(Object expected, Object actual) {
-        if (!expected.equals(actual)) {
-            throw new AssertionError("Expected " + expected + " but got " + actual);
-        }
-    }
-
-    private void assertTrue(boolean cond, String msg) {
-        if (!cond) throw new AssertionError(msg);
-    }
-
-    private void assertContains(String haystack, String needle) {
-        if (!haystack.contains(needle)) {
-            throw new AssertionError("Expected to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private void assertNotContains(String haystack, String needle) {
-        if (haystack.contains(needle)) {
-            throw new AssertionError("Expected NOT to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private <T extends Throwable> void assertThrows(Class<T> type, Runnable action) {
-        try {
-            action.run();
-            throw new AssertionError("Expected " + type.getSimpleName() + " but no exception thrown");
-        } catch (Throwable t) {
-            if (!type.isInstance(t)) {
-                throw new AssertionError("Expected " + type.getSimpleName()
-                        + " but got " + t.getClass().getSimpleName() + ": " + t.getMessage());
-            }
-        }
+        assertThatThrownBy(() -> registry.all().put("hack", null))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }

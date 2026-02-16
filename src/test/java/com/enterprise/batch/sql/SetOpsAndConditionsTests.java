@@ -5,87 +5,44 @@ import com.enterprise.batch.sql.builder.UnionBuilder.SetOperator;
 import com.enterprise.batch.sql.core.NullsOrder;
 import com.enterprise.batch.sql.core.SortDirection;
 import com.enterprise.batch.sql.param.ParameterBinder;
+import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 
 import static com.enterprise.batch.sql.condition.Conditions.*;
 import static com.enterprise.batch.example.tables.OrderTable.ORDERS;
 import static com.enterprise.batch.example.tables.CustomerTable.CUSTOMERS;
+import static org.assertj.core.api.Assertions.*;
 
 /**
  * Tests for EXCEPT/INTERSECT, notBetween, endsWith, FOR UPDATE, NULLS FIRST/LAST.
  */
 public class SetOpsAndConditionsTests {
 
-    private int passed = 0;
-    private int failed = 0;
-
-    public static void main(String[] args) {
-        SetOpsAndConditionsTests t = new SetOpsAndConditionsTests();
-        t.runAll();
-    }
-
-    public void runAll() {
-        System.out.println("=== Running Set Ops & Conditions Tests ===\n");
-
-        // EXCEPT / INTERSECT
-        test("EXCEPT basic", this::testExceptBasic);
-        test("INTERSECT basic", this::testIntersectBasic);
-        test("Mixed UNION+EXCEPT+INTERSECT", this::testMixedSetOps);
-        test("EXCEPT with ORDER BY", this::testExceptWithOrderBy);
-        test("INTERSECT with shared binder", this::testIntersectSharedBinder);
-        test("SetOperator enum sql()", this::testSetOperatorSql);
-
-        // notBetween
-        test("notBetween basic", this::testNotBetweenBasic);
-        test("notBetween parameterization", this::testNotBetweenParams);
-        test("notBetweenIfPresent null", this::testNotBetweenIfPresentNull);
-        test("notBetweenIfPresent non-null", this::testNotBetweenIfPresentNonNull);
-
-        // endsWith
-        test("endsWith basic", this::testEndsWithBasic);
-        test("endsWithIfPresent null", this::testEndsWithIfPresentNull);
-        test("endsWith parameterization", this::testEndsWithParams);
-
-        // FOR UPDATE
-        test("forUpdate basic", this::testForUpdateBasic);
-        test("forUpdateSkipLocked", this::testForUpdateSkipLocked);
-        test("forUpdateNoWait", this::testForUpdateNoWait);
-        test("forUpdate + pagination", this::testForUpdateWithPagination);
-
-        // NULLS FIRST / NULLS LAST
-        test("NULLS FIRST basic", this::testNullsFirstBasic);
-        test("NULLS LAST basic", this::testNullsLastBasic);
-        test("NULLS FIRST + forUpdate", this::testNullsFirstWithForUpdate);
-        test("Multiple ORDER BY mixed nulls", this::testMultipleOrderByMixedNulls);
-        test("NULLS LAST orderByExpr string", this::testNullsLastOrderByExprString);
-        test("NULLS FIRST orderByExpr condition", this::testNullsFirstOrderByExprCondition);
-
-        System.out.println("\n=== Set Ops & Conditions Results: " + passed + " passed, " + failed + " failed ===");
-        if (failed > 0) System.exit(1);
-    }
-
     // ==================== EXCEPT / INTERSECT ====================
 
+    @Test
     void testExceptBasic() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder).select(ORDERS.ID.ref()).from(ORDERS).build();
         SqlResult q2 = SelectBuilder.subquery(binder).select(CUSTOMERS.ID.ref()).from(CUSTOMERS).build();
         SqlResult r = UnionBuilder.create(binder).union(q1).except(q2).build();
-        assertContains(r.sql(), "EXCEPT");
-        assertNotContains(r.sql(), "UNION");
+        assertThat(r.sql()).contains("EXCEPT");
+        assertThat(r.sql()).doesNotContain("UNION");
         // First part has no operator prefix
-        assertTrue(r.sql().startsWith("SELECT"));
+        assertThat(r.sql()).startsWith("SELECT");
     }
 
+    @Test
     void testIntersectBasic() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder).select(ORDERS.ID.ref()).from(ORDERS).build();
         SqlResult q2 = SelectBuilder.subquery(binder).select(CUSTOMERS.ID.ref()).from(CUSTOMERS).build();
         SqlResult r = UnionBuilder.create(binder).union(q1).intersect(q2).build();
-        assertContains(r.sql(), "INTERSECT");
+        assertThat(r.sql()).contains("INTERSECT");
     }
 
+    @Test
     void testMixedSetOps() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder).select(ORDERS.ID.ref()).from(ORDERS).build();
@@ -96,11 +53,12 @@ public class SetOpsAndConditionsTests {
                 .where(eq(ORDERS.STATUS, "CLOSED")).build();
         SqlResult r = UnionBuilder.create(binder)
                 .union(q1).union(q2).except(q3).intersect(q4).build();
-        assertContains(r.sql(), "UNION");
-        assertContains(r.sql(), "EXCEPT");
-        assertContains(r.sql(), "INTERSECT");
+        assertThat(r.sql()).contains("UNION");
+        assertThat(r.sql()).contains("EXCEPT");
+        assertThat(r.sql()).contains("INTERSECT");
     }
 
+    @Test
     void testExceptWithOrderBy() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder).select(ORDERS.ID.ref()).from(ORDERS).build();
@@ -109,10 +67,11 @@ public class SetOpsAndConditionsTests {
                 .union(q1).except(q2)
                 .orderByExpr("1", SortDirection.ASC)
                 .build();
-        assertContains(r.sql(), "EXCEPT");
-        assertContains(r.sql(), "ORDER BY 1 ASC");
+        assertThat(r.sql()).contains("EXCEPT");
+        assertThat(r.sql()).contains("ORDER BY 1 ASC");
     }
 
+    @Test
     void testIntersectSharedBinder() {
         ParameterBinder binder = new ParameterBinder();
         SqlResult q1 = SelectBuilder.subquery(binder).select(ORDERS.ID.ref()).from(ORDERS)
@@ -121,110 +80,122 @@ public class SetOpsAndConditionsTests {
                 .where(eq(ORDERS.STATUS, "B")).build();
         SqlResult r = UnionBuilder.create(binder).union(q1).intersect(q2).build();
         // Both params present
-        assertEquals(2, r.namedParameters().size());
+        assertThat(r.namedParameters().size()).isEqualTo(2);
     }
 
+    @Test
     void testSetOperatorSql() {
-        assertEquals("UNION", SetOperator.UNION.sql());
-        assertEquals("UNION ALL", SetOperator.UNION_ALL.sql());
-        assertEquals("EXCEPT", SetOperator.EXCEPT.sql());
-        assertEquals("INTERSECT", SetOperator.INTERSECT.sql());
+        assertThat(SetOperator.UNION.sql()).isEqualTo("UNION");
+        assertThat(SetOperator.UNION_ALL.sql()).isEqualTo("UNION ALL");
+        assertThat(SetOperator.EXCEPT.sql()).isEqualTo("EXCEPT");
+        assertThat(SetOperator.INTERSECT.sql()).isEqualTo("INTERSECT");
     }
 
     // ==================== notBetween ====================
 
+    @Test
     void testNotBetweenBasic() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .where(notBetween(ORDERS.AMOUNT, BigDecimal.ONE, BigDecimal.TEN))
                 .build();
-        assertContains(r.sql(), "NOT BETWEEN");
-        assertContains(r.sql(), "AND");
+        assertThat(r.sql()).contains("NOT BETWEEN");
+        assertThat(r.sql()).contains("AND");
     }
 
+    @Test
     void testNotBetweenParams() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .where(notBetween(ORDERS.AMOUNT, BigDecimal.valueOf(100), BigDecimal.valueOf(999)))
                 .build();
-        assertContains(r.sql(), ":amount_from_1");
-        assertContains(r.sql(), ":amount_to_2");
-        assertEquals(2, r.namedParameters().size());
+        assertThat(r.sql()).contains(":amount_from_1");
+        assertThat(r.sql()).contains(":amount_to_2");
+        assertThat(r.namedParameters().size()).isEqualTo(2);
     }
 
+    @Test
     void testNotBetweenIfPresentNull() {
-        assertNull(notBetweenIfPresent(ORDERS.AMOUNT, null, BigDecimal.TEN));
-        assertNull(notBetweenIfPresent(ORDERS.AMOUNT, BigDecimal.ONE, null));
-        assertNull(notBetweenIfPresent(ORDERS.AMOUNT, (BigDecimal) null, (BigDecimal) null));
+        assertThat(notBetweenIfPresent(ORDERS.AMOUNT, null, BigDecimal.TEN)).isNull();
+        assertThat(notBetweenIfPresent(ORDERS.AMOUNT, BigDecimal.ONE, null)).isNull();
+        assertThat(notBetweenIfPresent(ORDERS.AMOUNT, (BigDecimal) null, (BigDecimal) null)).isNull();
     }
 
+    @Test
     void testNotBetweenIfPresentNonNull() {
         var cond = notBetweenIfPresent(ORDERS.AMOUNT, BigDecimal.ONE, BigDecimal.TEN);
-        assertNotNull(cond);
+        assertThat(cond).isNotNull();
         ParameterBinder binder = new ParameterBinder();
         String sql = cond.toSql(binder);
-        assertContains(sql, "NOT BETWEEN");
+        assertThat(sql).contains("NOT BETWEEN");
     }
 
     // ==================== endsWith ====================
 
+    @Test
     void testEndsWithBasic() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .where(endsWith(ORDERS.STATUS, "ING"))
                 .build();
-        assertContains(r.sql(), "LIKE");
+        assertThat(r.sql()).contains("LIKE");
         // Pattern value should be parameterized as %ING
         Object paramVal = r.namedParameters().values().iterator().next();
-        assertEquals("%ING", paramVal);
+        assertThat(paramVal).isEqualTo("%ING");
     }
 
+    @Test
     void testEndsWithIfPresentNull() {
-        assertNull(endsWithIfPresent(ORDERS.STATUS, null));
+        assertThat(endsWithIfPresent(ORDERS.STATUS, null)).isNull();
     }
 
+    @Test
     void testEndsWithParams() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .where(endsWith(ORDERS.STATUS, "ED"))
                 .build();
-        assertEquals(1, r.namedParameters().size());
-        assertContains(r.sql(), "LIKE :status_1");
+        assertThat(r.namedParameters().size()).isEqualTo(1);
+        assertThat(r.sql()).contains("LIKE :status_1");
     }
 
     // ==================== FOR UPDATE ====================
 
+    @Test
     void testForUpdateBasic() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .forUpdate()
                 .build();
-        assertTrue(r.sql().endsWith("FOR UPDATE"));
+        assertThat(r.sql()).endsWith("FOR UPDATE");
     }
 
+    @Test
     void testForUpdateSkipLocked() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .forUpdateSkipLocked()
                 .build();
-        assertTrue(r.sql().endsWith("FOR UPDATE SKIP LOCKED"));
+        assertThat(r.sql()).endsWith("FOR UPDATE SKIP LOCKED");
     }
 
+    @Test
     void testForUpdateNoWait() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .forUpdateNoWait()
                 .build();
-        assertTrue(r.sql().endsWith("FOR UPDATE NOWAIT"));
+        assertThat(r.sql()).endsWith("FOR UPDATE NOWAIT");
     }
 
+    @Test
     void testForUpdateWithPagination() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -232,30 +203,33 @@ public class SetOpsAndConditionsTests {
                 .limit(10)
                 .forUpdate()
                 .build();
-        assertContains(r.sql(), "FETCH FIRST");
-        assertTrue(r.sql().endsWith("FOR UPDATE"));
+        assertThat(r.sql()).contains("FETCH FIRST");
+        assertThat(r.sql()).endsWith("FOR UPDATE");
     }
 
     // ==================== NULLS FIRST / NULLS LAST ====================
 
+    @Test
     void testNullsFirstBasic() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref(), ORDERS.STATUS.ref())
                 .from(ORDERS)
                 .orderBy(ORDERS.STATUS, SortDirection.ASC, NullsOrder.NULLS_FIRST)
                 .build();
-        assertContains(r.sql(), "ORDER BY o.status ASC NULLS FIRST");
+        assertThat(r.sql()).contains("ORDER BY o.status ASC NULLS FIRST");
     }
 
+    @Test
     void testNullsLastBasic() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref(), ORDERS.STATUS.ref())
                 .from(ORDERS)
                 .orderBy(ORDERS.STATUS, SortDirection.DESC, NullsOrder.NULLS_LAST)
                 .build();
-        assertContains(r.sql(), "ORDER BY o.status DESC NULLS LAST");
+        assertThat(r.sql()).contains("ORDER BY o.status DESC NULLS LAST");
     }
 
+    @Test
     void testNullsFirstWithForUpdate() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
@@ -263,10 +237,11 @@ public class SetOpsAndConditionsTests {
                 .orderBy(ORDERS.STATUS, SortDirection.ASC, NullsOrder.NULLS_FIRST)
                 .forUpdate()
                 .build();
-        assertContains(r.sql(), "NULLS FIRST");
-        assertTrue(r.sql().endsWith("FOR UPDATE"));
+        assertThat(r.sql()).contains("NULLS FIRST");
+        assertThat(r.sql()).endsWith("FOR UPDATE");
     }
 
+    @Test
     void testMultipleOrderByMixedNulls() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref(), ORDERS.STATUS.ref(), ORDERS.AMOUNT.ref())
@@ -274,18 +249,20 @@ public class SetOpsAndConditionsTests {
                 .orderBy(ORDERS.STATUS, SortDirection.ASC, NullsOrder.NULLS_FIRST)
                 .orderBy(ORDERS.AMOUNT, SortDirection.DESC, NullsOrder.NULLS_LAST)
                 .build();
-        assertContains(r.sql(), "o.status ASC NULLS FIRST, o.amount DESC NULLS LAST");
+        assertThat(r.sql()).contains("o.status ASC NULLS FIRST, o.amount DESC NULLS LAST");
     }
 
+    @Test
     void testNullsLastOrderByExprString() {
         SqlResult r = SelectBuilder.query()
                 .select(ORDERS.ID.ref())
                 .from(ORDERS)
                 .orderByExpr("1", SortDirection.ASC, NullsOrder.NULLS_LAST)
                 .build();
-        assertContains(r.sql(), "ORDER BY 1 ASC NULLS LAST");
+        assertThat(r.sql()).contains("ORDER BY 1 ASC NULLS LAST");
     }
 
+    @Test
     void testNullsFirstOrderByExprCondition() {
         var caseExpr = com.enterprise.batch.sql.expression.Cases
                 .when(eq(ORDERS.STATUS, "URGENT")).then(1)
@@ -295,56 +272,7 @@ public class SetOpsAndConditionsTests {
                 .from(ORDERS)
                 .orderByExpr(caseExpr, SortDirection.ASC, NullsOrder.NULLS_FIRST)
                 .build();
-        assertContains(r.sql(), "NULLS FIRST");
-        assertContains(r.sql(), "CASE WHEN");
-    }
-
-    // ==================== Helpers ====================
-
-    private void test(String name, Runnable test) {
-        try {
-            test.run();
-            System.out.println("  \u2713 " + name);
-            passed++;
-        } catch (AssertionError | Exception e) {
-            System.out.println("  \u2717 " + name + " -> " + e.getMessage());
-            failed++;
-        }
-    }
-
-    private void assertEquals(Object expected, Object actual) {
-        if (!expected.equals(actual)) {
-            throw new AssertionError("Expected " + expected + " but got " + actual);
-        }
-    }
-
-    private void assertContains(String haystack, String needle) {
-        if (!haystack.contains(needle)) {
-            throw new AssertionError("Expected to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private void assertNotContains(String haystack, String needle) {
-        if (haystack.contains(needle)) {
-            throw new AssertionError("Expected NOT to contain '" + needle + "' in:\n  " + haystack);
-        }
-    }
-
-    private void assertNull(Object obj) {
-        if (obj != null) {
-            throw new AssertionError("Expected null but got " + obj);
-        }
-    }
-
-    private void assertNotNull(Object obj) {
-        if (obj == null) {
-            throw new AssertionError("Expected non-null");
-        }
-    }
-
-    private void assertTrue(boolean condition) {
-        if (!condition) {
-            throw new AssertionError("Expected true");
-        }
+        assertThat(r.sql()).contains("NULLS FIRST");
+        assertThat(r.sql()).contains("CASE WHEN");
     }
 }
