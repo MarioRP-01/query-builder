@@ -3,8 +3,8 @@ package com.enterprise.batch.sql;
 import com.enterprise.batch.sql.builder.*;
 import com.enterprise.batch.sql.builder.MergeBuilder.ColumnValue;
 import com.enterprise.batch.sql.param.ParameterBinder;
-import com.enterprise.batch.spring.port.BatchDmlProvider;
-import com.enterprise.batch.spring.adapter.DmlProviderRegistry;
+import com.enterprise.batch.shared.querybridge.port.BatchDmlProvider;
+import com.enterprise.batch.shared.querybridge.adapter.DmlProviderRegistry;
 
 import org.junit.jupiter.api.Test;
 

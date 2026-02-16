@@ -12,9 +12,10 @@ com.enterprise.batch
 │   ├── param/          ParameterBinder (named parameter management)
 │   ├── validation/     ExpressionValidator, SchemaValidator
 │   └── debug/          QueryDebugger
-├── spring/             Shared framework (domain-agnostic)
-│   ├── port/           BatchQueryProvider, BatchDmlProvider
-│   └── adapter/        BatchReaderFactory, BatchWriterFactory,
+├── shared/             Cross-cutting infrastructure
+│   └── querybridge/    SQL DSL ↔ Spring Batch bridge
+│       ├── port/       BatchQueryProvider, BatchDmlProvider
+│       └── adapter/    BatchReaderFactory, BatchWriterFactory,
 │                       QueryProviderRegistry, DmlProviderRegistry,
 │                       SpringBatchQueryConfig
 └── order/              Vertical domain slice

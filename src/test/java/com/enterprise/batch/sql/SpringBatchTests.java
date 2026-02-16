@@ -2,8 +2,8 @@ package com.enterprise.batch.sql;
 
 import com.enterprise.batch.sql.builder.SelectBuilder;
 import com.enterprise.batch.sql.builder.SqlResult;
-import com.enterprise.batch.spring.port.BatchQueryProvider;
-import com.enterprise.batch.spring.adapter.QueryProviderRegistry;
+import com.enterprise.batch.shared.querybridge.port.BatchQueryProvider;
+import com.enterprise.batch.shared.querybridge.adapter.QueryProviderRegistry;
 
 import org.junit.jupiter.api.Test;
 

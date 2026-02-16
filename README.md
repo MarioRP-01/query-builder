@@ -59,16 +59,17 @@ com.enterprise.batch.sql
 └── debug/                 # Production debugging (#13)
     └── QueryDebugger.java
 
-com.enterprise.batch.spring         # Spring Batch integration (shared framework)
-├── port/
-│   ├── BatchQueryProvider.java     # Provider contract (#9)
-│   └── BatchDmlProvider.java       # DML provider contract
-└── adapter/
-    ├── BatchReaderFactory.java     # JdbcCursorItemReader factory
-    ├── BatchWriterFactory.java     # JdbcBatchItemWriter factory
-    ├── QueryProviderRegistry.java  # Named query lookup
-    ├── DmlProviderRegistry.java    # Named DML lookup
-    └── SpringBatchQueryConfig.java # @Configuration wiring
+com.enterprise.batch.shared                     # Cross-cutting infrastructure
+└── querybridge/                                # SQL DSL ↔ Spring Batch bridge
+    ├── port/
+    │   ├── BatchQueryProvider.java             # Provider contract (#9)
+    │   └── BatchDmlProvider.java               # DML provider contract
+    └── adapter/
+        ├── BatchReaderFactory.java             # JdbcCursorItemReader factory
+        ├── BatchWriterFactory.java             # JdbcBatchItemWriter factory
+        ├── QueryProviderRegistry.java          # Named query lookup
+        ├── DmlProviderRegistry.java            # Named DML lookup
+        └── SpringBatchQueryConfig.java         # @Configuration wiring
 
 com.enterprise.batch.order          # Vertical domain slice
 ├── domain/                         # Pure Java: tables + DTOs

@@ -2,8 +2,8 @@ package com.enterprise.batch.order.infrastructure;
 
 import com.enterprise.batch.order.application.OrderQueries;
 import com.enterprise.batch.order.domain.OrderDto;
-import com.enterprise.batch.spring.adapter.BatchReaderFactory;
-import com.enterprise.batch.spring.adapter.QueryProviderRegistry;
+import com.enterprise.batch.shared.querybridge.adapter.BatchReaderFactory;
+import com.enterprise.batch.shared.querybridge.adapter.QueryProviderRegistry;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;

@@ -1,4 +1,4 @@
-package com.enterprise.batch.spring.adapter;
+package com.enterprise.batch.shared.querybridge.adapter;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `com.enterprise.batch.spring` package bridges the SQL DSL with Spring Batch's `ItemReader` / `ItemWriter` infrastructure. It uses a ports & adapters layout: `spring.port` holds pure Java contracts (`BatchQueryProvider`, `BatchDmlProvider`) with zero Spring imports, while `spring.adapter` holds the Spring Batch bridge (factories, registries, `@Configuration`). The key principle: **providers build fresh queries on every call**, ensuring thread safety and parameter isolation.
+The `com.enterprise.batch.shared.querybridge` package bridges the SQL DSL with Spring Batch's `ItemReader` / `ItemWriter` infrastructure. It uses a ports & adapters layout: `querybridge.port` holds pure Java contracts (`BatchQueryProvider`, `BatchDmlProvider`) with zero Spring imports, while `querybridge.adapter` holds the Spring Batch bridge (factories, registries, `@Configuration`). The key principle: **providers build fresh queries on every call**, ensuring thread safety and parameter isolation.
 
 ```
 Provider (stateless)  →  Factory (creates reader/writer)  →  Spring Batch step

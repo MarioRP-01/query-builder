@@ -1,4 +1,4 @@
-package com.enterprise.batch.spring.port;
+package com.enterprise.batch.shared.querybridge.port;
 
 import com.enterprise.batch.sql.builder.SqlResult;
 

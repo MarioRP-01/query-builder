@@ -2,7 +2,7 @@ package com.enterprise.batch.order.application;
 
 import com.enterprise.batch.sql.builder.SelectBuilder;
 import com.enterprise.batch.sql.core.SortDirection;
-import com.enterprise.batch.spring.port.BatchQueryProvider;
+import com.enterprise.batch.shared.querybridge.port.BatchQueryProvider;
 
 import static com.enterprise.batch.order.domain.CustomerTable.CUSTOMERS;
 import static com.enterprise.batch.order.domain.OrderTable.ORDERS;

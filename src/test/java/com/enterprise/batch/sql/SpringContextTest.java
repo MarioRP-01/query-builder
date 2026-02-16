@@ -1,8 +1,8 @@
 package com.enterprise.batch.sql;
 
 import com.enterprise.batch.BatchApplication;
-import com.enterprise.batch.spring.adapter.BatchReaderFactory;
-import com.enterprise.batch.spring.adapter.QueryProviderRegistry;
+import com.enterprise.batch.shared.querybridge.adapter.BatchReaderFactory;
+import com.enterprise.batch.shared.querybridge.adapter.QueryProviderRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;

@@ -36,13 +36,13 @@ Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracl
 6. **`Conditions.*`** (static import) — composable condition DSL: `eq()`, `or()`, `and()`, `eqIfPresent()`, `exists()`, etc.
 7. **`Cases.*`** (static import) — CASE expressions: `Cases.when(condition).then(val)...orElse(val).as(alias)` (searched), `Cases.of(column).when(val).then(val)...` (simple)
 
-### Spring Batch integration (`com.enterprise.batch.spring`) — shared framework
+### Spring Batch integration (`com.enterprise.batch.shared.querybridge`) — shared framework
 
-**`spring.port`** — pure Java contracts (zero Spring imports):
+**`querybridge.port`** — pure Java contracts (zero Spring imports):
 - **`BatchQueryProvider`** — `@FunctionalInterface` returning `SqlResult` from job params.
 - **`BatchDmlProvider`** — `@FunctionalInterface` returning `SqlResult` from job params (DML variant).
 
-**`spring.adapter`** — Spring Batch bridge:
+**`querybridge.adapter`** — Spring Batch bridge:
 - **`BatchReaderFactory`** — creates `JdbcCursorItemReader<T>` from a provider + `RowMapper` + `DataSource`. Converts named params to positional via `SqlResult.toPositional()`.
 - **`BatchWriterFactory`** — creates `JdbcBatchItemWriter<T>` from a provider + `ItemSqlParameterSourceProvider` + `DataSource`. Uses named params from `buildTemplate()`.
 - **`QueryProviderRegistry`** — named lookup for query providers when a job has many readers.
@@ -53,7 +53,7 @@ Type-safe SQL query DSL producing JDBC-ready SQL with named parameters for Oracl
 
 Each domain follows a 3-layer layout:
 - **`domain/`** — pure Java: `Table` definitions, DTOs. Zero framework imports, only `sql.core.*`.
-- **`application/`** — use cases: query providers (`OrderQueries`), business logic (`OrderEnricher`). Depends on domain + `sql.*` + `spring.port.*`, no Spring annotations.
+- **`application/`** — use cases: query providers (`OrderQueries`), business logic (`OrderEnricher`). Depends on domain + `sql.*` + `querybridge.port.*`, no Spring annotations.
 - **`infrastructure/`** — Spring wiring: `@Configuration` / `@Bean` classes (`ProcessOrdersJobConfig`, `OrderEnrichmentJobConfig`). Depends on everything.
 
 ### Key design decisions

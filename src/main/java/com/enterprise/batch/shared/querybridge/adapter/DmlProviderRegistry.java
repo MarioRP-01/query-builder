@@ -1,6 +1,6 @@
-package com.enterprise.batch.spring.adapter;
+package com.enterprise.batch.shared.querybridge.adapter;
 
-import com.enterprise.batch.spring.port.BatchDmlProvider;
+import com.enterprise.batch.shared.querybridge.port.BatchDmlProvider;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
