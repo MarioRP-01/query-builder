@@ -20,8 +20,9 @@ public class ParameterBinder {
      * The hint is used to generate a descriptive parameter name.
      */
     public String bind(Object value, String hint) {
+        Object resolved = value instanceof Boolean b ? (b ? 1 : 0) : value;
         String name = hint + "_" + counter.getAndIncrement();
-        parameters.put(name, value);
+        parameters.put(name, resolved);
         return ":" + name;
     }
 

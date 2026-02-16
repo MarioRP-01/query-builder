@@ -707,6 +707,31 @@ public class EdgeCaseTests {
         assertThat(r.sql()).contains("o.amount > o2.amount");
     }
 
+    // ==================== Boolean → Integer conversion ====================
+
+    @Test
+    void testBooleanTrueConvertsToOne() {
+        ParameterBinder binder = new ParameterBinder();
+        binder.bind(true, "flag");
+        assertThat(binder.getParameters().get("flag_1")).isEqualTo(1);
+    }
+
+    @Test
+    void testBooleanFalseConvertsToZero() {
+        ParameterBinder binder = new ParameterBinder();
+        binder.bind(false, "flag");
+        assertThat(binder.getParameters().get("flag_1")).isEqualTo(0);
+    }
+
+    @Test
+    void testNonBooleanUnchanged() {
+        ParameterBinder binder = new ParameterBinder();
+        binder.bind("text", "col");
+        binder.bind(42, "num");
+        assertThat(binder.getParameters().get("col_1")).isEqualTo("text");
+        assertThat(binder.getParameters().get("num_2")).isEqualTo(42);
+    }
+
     // ==================== Helpers ====================
 
     private int countOccurrences(String text, String sub) {
