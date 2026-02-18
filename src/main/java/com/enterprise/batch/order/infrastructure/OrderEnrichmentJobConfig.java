@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -94,15 +95,21 @@ public class OrderEnrichmentJobConfig {
             CsvWriterFactory csvFactory) throws IOException {
         Files.createDirectories(Path.of("output"));
 
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("orderId",         "order_id");
+        columns.put("customerName",    "customer_name");
+        columns.put("customerTier",    "customer_tier");
+        columns.put("productName",     "product_name");
+        columns.put("originalAmount",  "original_amount");
+        columns.put("taxAmount",       "tax_amount");
+        columns.put("discountAmount",  "discount_amount");
+        columns.put("finalAmount",     "final_amount");
+        columns.put("priority",        "priority");
+        columns.put("processedDate",   "processed_date");
+
         return csvFactory.csvWriter("summaryCsvWriter",
                 new FileSystemResource("output/order_summary.csv"),
-                new String[]{
-                    "orderId", "customerName", "customerTier", "productName",
-                    "originalAmount", "taxAmount", "discountAmount", "finalAmount",
-                    "priority", "processedDate"},
-                w -> w.write("order_id,customer_name,customer_tier,product_name,"
-                    + "original_amount,tax_amount,discount_amount,final_amount,"
-                    + "priority,processed_date"));
+                columns);
     }
 
     // --- Composite writer: DB + CSV ---

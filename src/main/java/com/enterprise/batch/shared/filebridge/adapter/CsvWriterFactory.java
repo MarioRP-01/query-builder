@@ -6,6 +6,8 @@ import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
 import org.springframework.batch.item.file.transform.DelimitedLineAggregator;
 import org.springframework.core.io.WritableResource;
 
+import java.util.Map;
+
 /**
  * Factory that creates CSV {@link FlatFileItemWriter} instances using
  * {@link BeanWrapperFieldExtractor} for dynamic field extraction.
@@ -13,23 +15,31 @@ import org.springframework.core.io.WritableResource;
  * <p>Field names drive both value extraction (via bean properties) and
  * header generation. Works with JavaBeans and Java records.
  *
- * <p>Typical usage:
+ * <p>Typical usage with a map (keys = bean properties, values = CSV headers):
  * <pre>{@code
  * @Bean
  * public FlatFileItemWriter<OrderDto> orderCsvWriter(CsvWriterFactory factory) {
  *     return factory.csvWriter("orderCsv",
  *             new FileSystemResource("output/orders.csv"),
- *             new String[]{"orderId", "customerName", "amount", "status"});
+ *             Map.of("orderId", "order_id",
+ *                    "customerName", "customer_name",
+ *                    "amount", "amount"));
  * }
  * }</pre>
  *
- * <p>With custom header and delimiter:
+ * <p>With per-call delimiter:
  * <pre>{@code
- * factory.setDelimiter(";");
  * return factory.csvWriter("orderCsv",
  *         new FileSystemResource("output/orders.csv"),
- *         new String[]{"orderId", "customerName", "amount", "status"},
- *         w -> w.write("ID;NAME;AMOUNT;STATUS"));
+ *         columns, ";");
+ * }</pre>
+ *
+ * <p>With field-name array and custom header callback:
+ * <pre>{@code
+ * return factory.csvWriter("orderCsv",
+ *         new FileSystemResource("output/orders.csv"),
+ *         new String[]{"orderId", "customerName", "amount"},
+ *         w -> w.write("ID;NAME;AMOUNT"));
  * }</pre>
  */
 public class CsvWriterFactory {
@@ -37,6 +47,57 @@ public class CsvWriterFactory {
     private String delimiter = ",";
     private String encoding = "UTF-8";
     private boolean shouldDeleteIfExists = true;
+
+    // ===================== Map-based API =====================
+
+    /**
+     * Creates a CSV writer with header derived from a column map.
+     *
+     * <p>Map keys are bean property names (drive extraction), values are
+     * CSV header names. Insertion order determines column order — use
+     * {@link java.util.LinkedHashMap} or {@link Map#of} for deterministic ordering.
+     *
+     * @param <T>      item type (bean or record)
+     * @param name     writer name (for restart data and logging)
+     * @param resource output file resource
+     * @param columns  bean property → CSV header name (insertion-ordered)
+     * @return configured writer
+     */
+    public <T> FlatFileItemWriter<T> csvWriter(
+            String name,
+            WritableResource resource,
+            Map<String, String> columns) {
+
+        return csvWriter(name, resource, columns, this.delimiter);
+    }
+
+    /**
+     * Creates a CSV writer with header derived from a column map and
+     * a per-call delimiter override.
+     *
+     * @param <T>       item type (bean or record)
+     * @param name      writer name (for restart data and logging)
+     * @param resource  output file resource
+     * @param columns   bean property → CSV header name (insertion-ordered)
+     * @param delimiter field delimiter for this writer
+     * @return configured writer
+     */
+    public <T> FlatFileItemWriter<T> csvWriter(
+            String name,
+            WritableResource resource,
+            Map<String, String> columns,
+            String delimiter) {
+
+        if (columns == null || columns.isEmpty()) {
+            throw new IllegalArgumentException("columns must not be empty");
+        }
+        String[] fieldNames = columns.keySet().toArray(String[]::new);
+        String[] headerNames = columns.values().toArray(String[]::new);
+        FlatFileHeaderCallback header = w -> w.write(String.join(delimiter, headerNames));
+        return buildWriter(name, resource, fieldNames, header, delimiter);
+    }
+
+    // ===================== String[] API =====================
 
     /**
      * Creates a CSV writer with auto-generated header from field names.
@@ -55,7 +116,8 @@ public class CsvWriterFactory {
             WritableResource resource,
             String[] fieldNames) {
 
-        return csvWriter(name, resource, fieldNames, defaultHeader(fieldNames));
+        return csvWriter(name, resource, fieldNames,
+                w -> w.write(String.join(this.delimiter, fieldNames)));
     }
 
     /**
@@ -74,6 +136,18 @@ public class CsvWriterFactory {
             String[] fieldNames,
             FlatFileHeaderCallback headerCallback) {
 
+        return buildWriter(name, resource, fieldNames, headerCallback, this.delimiter);
+    }
+
+    // ===================== Internal builder =====================
+
+    private <T> FlatFileItemWriter<T> buildWriter(
+            String name,
+            WritableResource resource,
+            String[] fieldNames,
+            FlatFileHeaderCallback headerCallback,
+            String effectiveDelimiter) {
+
         if (fieldNames == null || fieldNames.length == 0) {
             throw new IllegalArgumentException("fieldNames must not be empty");
         }
@@ -82,7 +156,7 @@ public class CsvWriterFactory {
         extractor.setNames(fieldNames);
 
         DelimitedLineAggregator<T> aggregator = new DelimitedLineAggregator<>();
-        aggregator.setDelimiter(delimiter);
+        aggregator.setDelimiter(effectiveDelimiter);
         aggregator.setFieldExtractor(extractor);
 
         FlatFileItemWriter<T> writer = new FlatFileItemWriter<>();
@@ -95,10 +169,6 @@ public class CsvWriterFactory {
             writer.setHeaderCallback(headerCallback);
         }
         return writer;
-    }
-
-    private FlatFileHeaderCallback defaultHeader(String[] fieldNames) {
-        return w -> w.write(String.join(delimiter, fieldNames));
     }
 
     /** Field delimiter. Default {@code ","}. */

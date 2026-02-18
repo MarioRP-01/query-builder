@@ -12,7 +12,9 @@ import org.springframework.core.io.FileSystemResource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 
@@ -48,7 +50,92 @@ class FileBridgeTests {
 
     public record ItemRecord(String name, int quantity, double price) {}
 
-    // ===================== CsvWriterFactory =====================
+    // ===================== CsvWriterFactory — Map API =====================
+
+    @Test
+    void writerMapAutoHeader(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("out.csv");
+        CsvWriterFactory factory = new CsvWriterFactory();
+
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("name", "PRODUCT_NAME");
+        columns.put("quantity", "QTY");
+        columns.put("price", "UNIT_PRICE");
+
+        FlatFileItemWriter<ItemBean> writer = factory.csvWriter("test",
+                new FileSystemResource(file), columns);
+
+        writer.open(new ExecutionContext());
+        writer.write(chunk(new ItemBean("Widget", 5, 9.99)));
+        writer.close();
+
+        List<String> lines = Files.readAllLines(file);
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0)).isEqualTo("PRODUCT_NAME,QTY,UNIT_PRICE");
+        assertThat(lines.get(1)).isEqualTo("Widget,5,9.99");
+    }
+
+    @Test
+    void writerMapWithDelimiter(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("out.csv");
+        CsvWriterFactory factory = new CsvWriterFactory();
+
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("name", "NAME");
+        columns.put("price", "PRICE");
+
+        FlatFileItemWriter<ItemBean> writer = factory.csvWriter("test",
+                new FileSystemResource(file), columns, ";");
+
+        writer.open(new ExecutionContext());
+        writer.write(chunk(new ItemBean("Gadget", 3, 19.50)));
+        writer.close();
+
+        List<String> lines = Files.readAllLines(file);
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0)).isEqualTo("NAME;PRICE");
+        assertThat(lines.get(1)).isEqualTo("Gadget;19.5");
+    }
+
+    @Test
+    void writerMapSubsetOfFields(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("out.csv");
+        CsvWriterFactory factory = new CsvWriterFactory();
+
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("quantity", "QTY");
+        columns.put("name", "ITEM");
+
+        FlatFileItemWriter<ItemBean> writer = factory.csvWriter("test",
+                new FileSystemResource(file), columns);
+
+        writer.open(new ExecutionContext());
+        writer.write(chunk(new ItemBean("A", 10, 5.0)));
+        writer.close();
+
+        List<String> lines = Files.readAllLines(file);
+        assertThat(lines.get(0)).isEqualTo("QTY,ITEM");
+        assertThat(lines.get(1)).isEqualTo("10,A");
+    }
+
+    @Test
+    void writerMapEmptyThrows() {
+        CsvWriterFactory factory = new CsvWriterFactory();
+        assertThatThrownBy(() -> factory.csvWriter("test",
+                new FileSystemResource("dummy"), Map.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("columns");
+    }
+
+    @Test
+    void writerMapNullThrows() {
+        CsvWriterFactory factory = new CsvWriterFactory();
+        assertThatThrownBy(() -> factory.csvWriter("test",
+                new FileSystemResource("dummy"), (Map<String, String>) null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ===================== CsvWriterFactory — String[] API =====================
 
     @Test
     void writerAutoHeader(@TempDir Path tmp) throws Exception {
@@ -249,7 +336,7 @@ class FileBridgeTests {
     }
 
     @Test
-    void readerCustomDelimiter(@TempDir Path tmp) throws Exception {
+    void readerCustomDelimiterViaFactory(@TempDir Path tmp) throws Exception {
         Path file = tmp.resolve("in.csv");
         Files.writeString(file, "name;quantity\nheader_skipped\nDelta;99\n");
 
@@ -271,9 +358,51 @@ class FileBridgeTests {
     }
 
     @Test
+    void readerPerCallDelimiterBeanWrapper(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("in.csv");
+        Files.writeString(file, "name|price\nEpsilon|42.5\n");
+
+        CsvReaderFactory factory = new CsvReaderFactory();
+        FlatFileItemReader<ItemBean> reader = factory.csvReader("test",
+                new FileSystemResource(file),
+                new String[]{"name", "price"},
+                ItemBean.class,
+                "|");
+
+        reader.open(new ExecutionContext());
+        ItemBean item = reader.read();
+        reader.close();
+
+        assertThat(item.getName()).isEqualTo("Epsilon");
+        assertThat(item.getPrice()).isEqualTo(42.5);
+    }
+
+    @Test
+    void readerPerCallDelimiterMapper(@TempDir Path tmp) throws Exception {
+        Path file = tmp.resolve("in.csv");
+        Files.writeString(file, "name\tquantity\tprice\nZeta\t8\t3.14\n");
+
+        CsvReaderFactory factory = new CsvReaderFactory();
+        FlatFileItemReader<ItemRecord> reader = factory.csvReader("test",
+                new FileSystemResource(file),
+                new String[]{"name", "quantity", "price"},
+                fs -> new ItemRecord(
+                        fs.readString("name"),
+                        fs.readInt("quantity"),
+                        fs.readDouble("price")),
+                "\t");
+
+        reader.open(new ExecutionContext());
+        ItemRecord item = reader.read();
+        reader.close();
+
+        assertThat(item).isEqualTo(new ItemRecord("Zeta", 8, 3.14));
+    }
+
+    @Test
     void readerSubsetOfFields(@TempDir Path tmp) throws Exception {
         Path file = tmp.resolve("in.csv");
-        // CSV has 3 columns but we only map 2 (name, quantity)
+        // CSV has 2 columns but we only map 2 (name, quantity)
         Files.writeString(file, "name,quantity\nEpsilon,42\n");
 
         CsvReaderFactory factory = new CsvReaderFactory();
@@ -313,21 +442,32 @@ class FileBridgeTests {
     @Test
     void roundTripWriteThenRead(@TempDir Path tmp) throws Exception {
         Path file = tmp.resolve("roundtrip.csv");
-        String[] fields = new String[]{"name", "quantity", "price"};
 
-        // Write
+        // Write using Map API
         CsvWriterFactory writerFactory = new CsvWriterFactory();
-        FlatFileItemWriter<ItemBean> writer = writerFactory.csvWriter("w", new FileSystemResource(file), fields);
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("name", "item_name");
+        columns.put("quantity", "qty");
+        columns.put("price", "unit_price");
+
+        FlatFileItemWriter<ItemBean> writer = writerFactory.csvWriter("w",
+                new FileSystemResource(file), columns);
         writer.open(new ExecutionContext());
         writer.write(chunk(
                 new ItemBean("X", 1, 10.0),
                 new ItemBean("Y", 2, 20.5)));
         writer.close();
 
+        // Verify header uses map values
+        List<String> lines = Files.readAllLines(file);
+        assertThat(lines.get(0)).isEqualTo("item_name,qty,unit_price");
+
         // Read back
         CsvReaderFactory readerFactory = new CsvReaderFactory();
         FlatFileItemReader<ItemBean> reader = readerFactory.csvReader("r",
-                new FileSystemResource(file), fields, ItemBean.class);
+                new FileSystemResource(file),
+                new String[]{"name", "quantity", "price"},
+                ItemBean.class);
         reader.open(new ExecutionContext());
         ItemBean first = reader.read();
         ItemBean second = reader.read();
