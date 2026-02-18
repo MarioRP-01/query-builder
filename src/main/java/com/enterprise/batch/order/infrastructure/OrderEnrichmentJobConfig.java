@@ -4,6 +4,7 @@ import com.enterprise.batch.order.application.OrderEnricher;
 import com.enterprise.batch.order.application.OrderQueries;
 import com.enterprise.batch.order.domain.EnrichedOrderDto;
 import com.enterprise.batch.order.domain.OrderDetailDto;
+import com.enterprise.batch.shared.filebridge.CsvWriterFactory;
 import com.enterprise.batch.shared.querybridge.adapter.BatchReaderFactory;
 import com.enterprise.batch.shared.querybridge.adapter.QueryProviderRegistry;
 
@@ -89,28 +90,19 @@ public class OrderEnrichmentJobConfig {
     // --- Writer 2: CSV report ---
 
     @Bean
-    FlatFileItemWriter<EnrichedOrderDto> summaryCsvWriter() throws IOException {
+    FlatFileItemWriter<EnrichedOrderDto> summaryCsvWriter(
+            CsvWriterFactory csvFactory) throws IOException {
         Files.createDirectories(Path.of("output"));
 
-        FlatFileItemWriter<EnrichedOrderDto> writer = new FlatFileItemWriter<>();
-        writer.setName("summaryCsvWriter");
-        writer.setResource(new FileSystemResource("output/order_summary.csv"));
-        writer.setHeaderCallback(w -> w.write(
-            "order_id,customer_name,customer_tier,product_name,"
-            + "original_amount,tax_amount,discount_amount,final_amount,"
-            + "priority,processed_date"));
-        writer.setLineAggregator(item -> String.join(",",
-            String.valueOf(item.orderId()),
-            item.customerName(),
-            item.customerTier(),
-            item.productName(),
-            item.originalAmount().toPlainString(),
-            item.taxAmount().toPlainString(),
-            item.discountAmount().toPlainString(),
-            item.finalAmount().toPlainString(),
-            item.priority(),
-            item.processedDate().toString()));
-        return writer;
+        return csvFactory.csvWriter("summaryCsvWriter",
+                new FileSystemResource("output/order_summary.csv"),
+                new String[]{
+                    "orderId", "customerName", "customerTier", "productName",
+                    "originalAmount", "taxAmount", "discountAmount", "finalAmount",
+                    "priority", "processedDate"},
+                w -> w.write("order_id,customer_name,customer_tier,product_name,"
+                    + "original_amount,tax_amount,discount_amount,final_amount,"
+                    + "priority,processed_date"));
     }
 
     // --- Composite writer: DB + CSV ---
