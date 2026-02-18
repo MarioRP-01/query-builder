@@ -1,4 +1,4 @@
-package com.enterprise.batch.shared.filebridge;
+package com.enterprise.batch.shared.filebridge.adapter;
 
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;

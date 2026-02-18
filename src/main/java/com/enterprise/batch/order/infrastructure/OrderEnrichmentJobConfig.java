@@ -4,7 +4,7 @@ import com.enterprise.batch.order.application.OrderEnricher;
 import com.enterprise.batch.order.application.OrderQueries;
 import com.enterprise.batch.order.domain.EnrichedOrderDto;
 import com.enterprise.batch.order.domain.OrderDetailDto;
-import com.enterprise.batch.shared.filebridge.CsvWriterFactory;
+import com.enterprise.batch.shared.filebridge.adapter.CsvWriterFactory;
 import com.enterprise.batch.shared.querybridge.adapter.BatchReaderFactory;
 import com.enterprise.batch.shared.querybridge.adapter.QueryProviderRegistry;
 

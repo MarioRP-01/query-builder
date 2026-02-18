@@ -1,4 +1,4 @@
-package com.enterprise.batch.shared.filebridge;
+package com.enterprise.batch.shared.filebridge.adapter;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

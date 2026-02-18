@@ -1,7 +1,7 @@
 package com.enterprise.batch.sql;
 
-import com.enterprise.batch.shared.filebridge.CsvReaderFactory;
-import com.enterprise.batch.shared.filebridge.CsvWriterFactory;
+import com.enterprise.batch.shared.filebridge.adapter.CsvReaderFactory;
+import com.enterprise.batch.shared.filebridge.adapter.CsvWriterFactory;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
