@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
  * The main entry point for building type-safe SQL queries.
  * Produces {@link SqlResult} with named parameters.
  *
- * <p>Unsupported: window functions (ROW_NUMBER, RANK, LAG, LEAD), RECURSIVE CTEs,
+ * <p>Unsupported: RECURSIVE CTEs,
  * typed HAVING on aggregates (use {@link #havingRaw}).
  *
  * <p>Addresses all identified gaps:

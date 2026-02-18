@@ -8,7 +8,7 @@ Consolidated list of SQL features not yet covered by the DSL, grouped by compone
 |---------|-----------|
 | ~~`FOR UPDATE` / `FOR UPDATE SKIP LOCKED`~~ | **Now supported** via `forUpdate()`, `forUpdateNoWait()`, `forUpdateSkipLocked()` |
 | ~~`NULLS FIRST` / `NULLS LAST` in ORDER BY~~ | **Now supported** via `orderBy(col, dir, NullsOrder.NULLS_FIRST)` |
-| Window functions (`ROW_NUMBER`, `RANK`, `LAG`, `LEAD`) | Use `selectRaw()` for the window expression |
+| ~~Window functions (`ROW_NUMBER`, `RANK`, `LAG`, `LEAD`)~~ | **Now supported** via `selectExpr()` + `Over.rowNumber()` / `Over.sum()` / etc. |
 | ~~`CASE WHEN ... THEN ... ELSE ... END`~~ | **Now supported** via `selectExpr()` + `Cases.when()` / `Cases.of()` |
 | `RECURSIVE` CTEs | Use `with()` + raw recursive SQL via subquery builder |
 | Typed HAVING on aggregates | Use `havingRaw("SUM(o.amount) >= ?", 1000)` |
