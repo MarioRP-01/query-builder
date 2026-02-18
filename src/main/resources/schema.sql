@@ -65,3 +65,37 @@ CREATE TABLE order_analytics (
     velocity_flag VARCHAR(20),
     CONSTRAINT fk_analytics_order FOREIGN KEY (order_id) REFERENCES orders(id)
 );
+
+CREATE TABLE evaluation_groups (
+    id BIGINT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE group_elements (
+    id BIGINT PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    element_value DECIMAL(10,2) NOT NULL,
+    category VARCHAR(50),
+    created_date DATE,
+    CONSTRAINT fk_elements_group FOREIGN KEY (group_id) REFERENCES evaluation_groups(id)
+);
+
+CREATE TABLE group_conditions (
+    id BIGINT PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    condition_code VARCHAR(50) NOT NULL,
+    operator VARCHAR(10) NOT NULL,
+    threshold DECIMAL(10,2),
+    aggregate_key VARCHAR(50),
+    CONSTRAINT fk_conditions_group FOREIGN KEY (group_id) REFERENCES evaluation_groups(id)
+);
+
+CREATE TABLE failed_conditions (
+    element_id BIGINT NOT NULL,
+    group_id BIGINT NOT NULL,
+    condition_code VARCHAR(50) NOT NULL,
+    element_value DECIMAL(10,2),
+    threshold_value DECIMAL(10,2),
+    evaluated_date DATE
+);
