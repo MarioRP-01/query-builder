@@ -47,3 +47,21 @@ CREATE TABLE order_summaries (
     processed_date DATE,
     CONSTRAINT fk_summaries_order FOREIGN KEY (order_id) REFERENCES orders(id)
 );
+
+CREATE TABLE order_analytics (
+    order_id BIGINT PRIMARY KEY,
+    amount DECIMAL(10,2),
+    created_date DATE,
+    customer_name VARCHAR(100),
+    region VARCHAR(50),
+    tier VARCHAR(20),
+    customer_order_seq BIGINT,
+    customer_running_total DECIMAL(12,2),
+    prev_amount DECIMAL(10,2),
+    region_amount_rank BIGINT,
+    region_spend_pct DECIMAL(10,6),
+    spend_quartile BIGINT,
+    trend VARCHAR(20),
+    velocity_flag VARCHAR(20),
+    CONSTRAINT fk_analytics_order FOREIGN KEY (order_id) REFERENCES orders(id)
+);

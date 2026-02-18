@@ -44,6 +44,10 @@ public class SpringContextTest {
     @Qualifier("orderEnrichmentJob")
     Job orderEnrichmentJob;
 
+    @Autowired
+    @Qualifier("orderAnalyticsJob")
+    Job orderAnalyticsJob;
+
     @Test
     void batchReaderFactoryBeanExists() {
         assertThat(readerFactory).isNotNull();
@@ -54,13 +58,15 @@ public class SpringContextTest {
         assertThat(registry.all()).containsKey("pendingOrders");
         assertThat(registry.all()).containsKey("highValueCustomers");
         assertThat(registry.all()).containsKey("orderDetails");
-        assertThat(registry.all()).hasSize(3);
+        assertThat(registry.all()).containsKey("orderAnalytics");
+        assertThat(registry.all()).hasSize(4);
     }
 
     @Test
     void jobBeansExist() {
         assertThat(processOrdersJob).isNotNull();
         assertThat(orderEnrichmentJob).isNotNull();
+        assertThat(orderAnalyticsJob).isNotNull();
     }
 
     @Test
