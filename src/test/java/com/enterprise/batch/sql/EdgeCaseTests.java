@@ -284,6 +284,7 @@ public class EdgeCaseTests {
 
     @Test
     void testColumnAggregates() {
+        assertThat(Column.countAllAs("total")).isEqualTo("COUNT(*) AS total");
         assertThat(ORDERS.ID.countAs("cnt")).isEqualTo("COUNT(o.id) AS cnt");
         assertThat(ORDERS.AMOUNT.sumAs("total")).isEqualTo("SUM(o.amount) AS total");
         assertThat(ORDERS.AMOUNT.avgAs("avg_amt")).isEqualTo("AVG(o.amount) AS avg_amt");
