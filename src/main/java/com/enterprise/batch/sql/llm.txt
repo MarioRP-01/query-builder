@@ -42,6 +42,7 @@ public final class OrderTable extends Table {
 | `col.refAs("x")` | `"alias.col_name AS x"` | SELECT with alias |
 | `col.name()` | `"col_name"` | SET clauses (unqualified) |
 | `col.eqColumn(other)` | `"a.col = b.col"` | JOIN ON, column comparison |
+| `Column.countAllAs("x")` | `"COUNT(*) AS x"` | Static. Aggregate in SELECT |
 | `col.countAs("x")` | `"COUNT(a.col) AS x"` | Aggregate in SELECT |
 | `col.sumAs("x")` | `"SUM(a.col) AS x"` | Aggregate in SELECT |
 | `col.avgAs("x")` | `"AVG(a.col) AS x"` | Aggregate in SELECT |

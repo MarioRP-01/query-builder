@@ -41,6 +41,7 @@ public class Column<T> {
     }
 
     // Aggregate helpers
+    public static String countAllAs(String alias) { return "COUNT(*) AS " + alias; }
     public String countAs(String alias) { return "COUNT(" + ref() + ") AS " + alias; }
     public String sumAs(String alias)   { return "SUM(" + ref() + ") AS " + alias; }
     public String avgAs(String alias)   { return "AVG(" + ref() + ") AS " + alias; }
