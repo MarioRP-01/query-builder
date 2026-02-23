@@ -1,0 +1,1277 @@
+# QueryBuilder SQL DSL — LLM Reference
+
+Type-safe SQL query DSL for Java 17+. Produces JDBC-ready SQL with named parameters. Target: Oracle 12c+ (ANSI syntax). Runtime: Spring Batch.
+
+Package: `com.enterprise.batch.sql`
+
+---
+
+## TABLE & COLUMN DEFINITIONS
+
+Tables extend `Table`. Columns MUST be assigned in constructor (required for `as()` aliasing).
+
+```java
+public final class OrderTable extends Table {
+    public static final OrderTable ORDERS = new OrderTable("o");
+
+    public final Column<Long>       ID;
+    public final Column<BigDecimal>  AMOUNT;
+    public final Column<String>      STATUS;
+    public final Column<Long>        CUSTOMER_ID;
+    public final Column<LocalDate>   CREATED_DATE;
+
+    public OrderTable(String alias) {
+        super("orders", alias);
+        this.ID           = column("id", Long.class);
+        this.AMOUNT       = column("amount", BigDecimal.class);
+        this.STATUS       = column("status", String.class);
+        this.CUSTOMER_ID  = column("customer_id", Long.class);
+        this.CREATED_DATE = column("created_date", LocalDate.class);
+    }
+
+    @Override
+    public OrderTable as(String newAlias) { return new OrderTable(newAlias); }
+}
+```
+
+### Column API
+
+| Method | Returns | Use |
+|--------|---------|-----|
+| `col.ref()` | `"alias.col_name"` | SELECT, WHERE, ON, ORDER BY |
+| `col.refAs("x")` | `"alias.col_name AS x"` | SELECT with alias |
+| `col.name()` | `"col_name"` | SET clauses (unqualified) |
+| `col.eqColumn(other)` | `"a.col = b.col"` | JOIN ON, column comparison |
+| `col.countAs("x")` | `"COUNT(a.col) AS x"` | Aggregate in SELECT |
+| `col.sumAs("x")` | `"SUM(a.col) AS x"` | Aggregate in SELECT |
+| `col.avgAs("x")` | `"AVG(a.col) AS x"` | Aggregate in SELECT |
+| `col.minAs("x")` | `"MIN(a.col) AS x"` | Aggregate in SELECT |
+| `col.maxAs("x")` | `"MAX(a.col) AS x"` | Aggregate in SELECT |
+
+### Self-Joins (aliasing)
+
+`as()` creates a NEW instance with fresh columns bound to the new alias:
+
+```java
+OrderTable o2 = ORDERS.as("o2");
+// o2.ID.ref() → "o2.id", ORDERS.ID.ref() → "o.id"
+```
+
+---
+
+## SELECT BUILDER
+
+Entry: `SelectBuilder.query()` (fresh binder) or `SelectBuilder.subquery(binder)` (shared binder).
+
+### Minimal query
+
+```java
+SqlResult result = SelectBuilder.query()
+    .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref())
+    .from(ORDERS)
+    .where(eq(ORDERS.STATUS, "PENDING"))
+    .build();
+
+result.sql();              // "SELECT o.id, o.amount FROM orders o WHERE o.status = :status_1"
+result.namedParameters();  // {status_1: "PENDING"}
+```
+
+### Full chain
+
+```java
+SelectBuilder.query()
+    .dialect(Dialects.ORACLE)              // optional, ORACLE is default
+    .with(cte)                             // CTE (WITH clause)
+    .select("col1", "col2")               // columns (clears previous)
+    .selectDistinct("col1")               // SELECT DISTINCT
+    .selectRaw("1 AS one")               // raw expression (validated)
+    .selectExpr(caseExpr, windowExpr)     // CASE/window (appends, non-clearing)
+    .from(table)                           // FROM table
+    .fromSubquery(subResult, "alias")     // FROM (subquery) alias
+    .innerJoin(t, leftCol, rightCol)      // INNER JOIN t ON l = r
+    .leftJoin(t, leftCol, rightCol)       // LEFT JOIN t ON l = r
+    .join(JoinType.FULL, t, leftCol, rightCol)
+    .join(JoinType.INNER, t, cond1, cond2)   // multi-condition ON
+    .joinSubquery(JoinType.INNER, sub, "a", "a.id = o.id")
+    .joinRaw(JoinType.INNER, "cte_name", "cte_name.id = o.id")
+    .where(cond1, cond2, cond3)           // nulls silently filtered
+    .groupBy(col1, col2)                  // GROUP BY columns
+    .groupByExpr("TRUNC(o.created_date)") // GROUP BY expression
+    .having(condition)                     // HAVING with condition
+    .havingRaw("SUM(o.amount) >= ?", 1000) // HAVING raw aggregate
+    .orderBy(col, SortDirection.DESC)
+    .orderBy(col, SortDirection.ASC, NullsOrder.NULLS_FIRST)
+    .orderByExpr("total", SortDirection.DESC)
+    .orderByExpr(caseExpr, SortDirection.ASC)
+    .limit(50)
+    .offset(100)
+    .forUpdate()                           // or forUpdateNoWait(), forUpdateSkipLocked()
+    .build();                              // → SqlResult
+```
+
+### JOIN types
+
+`JoinType.INNER`, `LEFT`, `RIGHT`, `FULL`, `CROSS`
+
+Shortcuts: `.innerJoin(t, l, r)`, `.leftJoin(t, l, r)`
+
+### Subqueries (shared binder)
+
+```java
+ParameterBinder binder = new ParameterBinder();
+
+SqlResult sub = SelectBuilder.subquery(binder)
+    .select(ORDERS.CUSTOMER_ID.ref())
+    .from(ORDERS)
+    .where(gte(ORDERS.AMOUNT, new BigDecimal("1000")))
+    .groupBy(ORDERS.CUSTOMER_ID)
+    .build();
+
+SqlResult main = SelectBuilder.subquery(binder)
+    .select(CUSTOMERS.ID.ref(), CUSTOMERS.NAME.ref())
+    .from(CUSTOMERS)
+    .where(inSubquery(CUSTOMERS.ID, sub))
+    .build();
+```
+
+### Correlated subquery with EXISTS
+
+```java
+ParameterBinder binder = new ParameterBinder();
+
+SqlResult recentOrders = SelectBuilder.subquery(binder)
+    .selectRaw("1")
+    .from(ORDERS)
+    .where(
+        eqColumn(ORDERS.CUSTOMER_ID, CUSTOMERS.ID),
+        gte(ORDERS.CREATED_DATE, LocalDate.of(2025, 1, 1))
+    )
+    .build();
+
+SqlResult result = SelectBuilder.subquery(binder)
+    .select(CUSTOMERS.ID.ref(), CUSTOMERS.NAME.ref())
+    .from(CUSTOMERS)
+    .where(exists(recentOrders))
+    .build();
+```
+
+### Derived table (FROM subquery)
+
+```java
+ParameterBinder binder = new ParameterBinder();
+
+SqlResult sub = SelectBuilder.subquery(binder)
+    .select(ORDERS.CUSTOMER_ID.ref(), ORDERS.AMOUNT.avgAs("avg_amount"))
+    .from(ORDERS)
+    .groupBy(ORDERS.CUSTOMER_ID)
+    .build();
+
+SqlResult main = SelectBuilder.subquery(binder)
+    .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref())
+    .from(ORDERS)
+    .joinSubquery(JoinType.INNER, sub, "summary",
+        "summary.customer_id = " + ORDERS.CUSTOMER_ID.ref())
+    .build();
+```
+
+### Pagination
+
+```java
+.limit(50)              // FETCH FIRST 50 ROWS ONLY
+.offset(100)            // OFFSET 100 ROWS
+.limit(50).offset(100)  // OFFSET 100 ROWS FETCH NEXT 50 ROWS ONLY
+```
+
+### GROUP BY + HAVING + aggregates
+
+```java
+SelectBuilder.query()
+    .select(
+        CUSTOMERS.REGION.ref(),
+        ORDERS.ID.countAs("order_count"),
+        ORDERS.AMOUNT.sumAs("total_amount"),
+        ORDERS.AMOUNT.avgAs("avg_amount")
+    )
+    .from(ORDERS)
+    .innerJoin(CUSTOMERS, ORDERS.CUSTOMER_ID, CUSTOMERS.ID)
+    .groupBy(CUSTOMERS.REGION)
+    .havingRaw("SUM(o.amount) >= ?", new BigDecimal("1000"))
+    .havingRaw("COUNT(o.id) >= ?", 10)
+    .orderByExpr("total_amount", SortDirection.DESC)
+    .build();
+```
+
+---
+
+## CONDITIONS
+
+Static import: `import static com.enterprise.batch.sql.condition.Conditions.*;`
+
+### Null semantics split
+
+- **Strict** methods (`eq`, `gt`, etc.) — throw `NullPointerException` on null value
+- **Optional** methods (`eqIfPresent`, `gtIfPresent`, etc.) — return `null` on null value
+- `.where()` silently filters out null conditions
+
+This prevents accidental `WHERE col = NULL` (should be `IS NULL`) and enables safe optional filtering.
+
+### All condition types
+
+**Equality:**
+```java
+eq(ORDERS.STATUS, "PENDING")           // o.status = :status_1
+neq(ORDERS.STATUS, "CANCELLED")        // o.status <> :status_1
+eqIfPresent(ORDERS.STATUS, maybeNull)  // null if maybeNull is null
+neqIfPresent(ORDERS.STATUS, maybeNull)
+```
+
+**Comparison (requires `Comparable<? super V>`):**
+```java
+gt(ORDERS.AMOUNT, BigDecimal.TEN)       // o.amount > :amount_1
+gte(ORDERS.AMOUNT, BigDecimal.TEN)      // o.amount >= :amount_1
+lt(ORDERS.AMOUNT, BigDecimal.TEN)       // o.amount < :amount_1
+lte(ORDERS.AMOUNT, BigDecimal.TEN)      // o.amount <= :amount_1
+gtIfPresent(col, val)                   // null if val is null
+gteIfPresent(col, val)
+ltIfPresent(col, val)
+lteIfPresent(col, val)
+```
+
+**BETWEEN:**
+```java
+between(ORDERS.AMOUNT, min, max)               // o.amount BETWEEN :p1 AND :p2
+notBetween(ORDERS.AMOUNT, min, max)
+betweenIfPresent(ORDERS.AMOUNT, min, max)      // null if min or max is null
+notBetweenIfPresent(ORDERS.AMOUNT, min, max)
+```
+
+**LIKE (pattern always parameterized):**
+```java
+like(ORDERS.STATUS, "PEN%")                // o.status LIKE :status_1
+notLike(ORDERS.STATUS, "CAN%")
+contains(ORDERS.STATUS, "END")             // LIKE '%END%'
+startsWith(ORDERS.STATUS, "PEN")           // LIKE 'PEN%'
+endsWith(ORDERS.STATUS, "ING")             // LIKE '%ING'
+likeIfPresent(col, pattern)
+containsIfPresent(col, val)
+startsWithIfPresent(col, val)
+endsWithIfPresent(col, val)
+```
+
+**IN / NOT IN:**
+```java
+in(ORDERS.STATUS, List.of("A", "B", "C"))     // o.status IN (:p1, :p2, :p3)
+notIn(ORDERS.STATUS, List.of("X", "Y"))
+inIfPresent(ORDERS.STATUS, maybeNullOrEmpty)   // null if null or empty list
+notInIfPresent(ORDERS.STATUS, maybeNullOrEmpty)
+```
+
+**NULL checks:**
+```java
+isNull(ORDERS.CATEGORY)       // o.category IS NULL
+isNotNull(ORDERS.CATEGORY)    // o.category IS NOT NULL
+```
+
+**Column-to-column:**
+```java
+eqColumn(ORDERS.CUSTOMER_ID, CUSTOMERS.ID)               // o.customer_id = c.id
+columnOp(ORDERS.AMOUNT, ComparisonOp.GT, PRODUCTS.PRICE)  // o.amount > p.price
+```
+
+**Subquery conditions:**
+```java
+inSubquery(ORDERS.CUSTOMER_ID, subResult)        // o.customer_id IN (SELECT ...)
+notInSubquery(ORDERS.ID, subResult)
+exists(subResult)                                 // EXISTS (SELECT ...)
+notExists(subResult)
+subquery(ORDERS.AMOUNT, ComparisonOp.GT, sub)    // o.amount > (SELECT ...)
+```
+
+**Raw SQL (escape hatch, validated for injection):**
+```java
+raw("o.amount BETWEEN ? AND ?", BigDecimal.ONE, BigDecimal.TEN)
+raw(ORDERS.ID.ref() + " <> " + o2.ID.ref())
+```
+
+### Composition (AND / OR)
+
+```java
+// Strict: throws if no non-null children remain
+and(cond1, cond2, cond3)        // (cond1 AND cond2 AND cond3)
+or(cond1, cond2)                // (cond1 OR cond2)
+
+// Optional: returns null if no non-null children
+andIfAny(cond1, null, cond3)    // (cond1 AND cond3) — null filtered
+orIfAny(null, null)             // null — all filtered
+
+// Nesting
+or(
+    eq(ORDERS.STATUS, "PENDING"),
+    and(
+        gte(ORDERS.AMOUNT, new BigDecimal("1000")),
+        eq(ORDERS.REGION, "EU")
+    )
+)
+```
+
+### Dynamic optional filter pattern
+
+```java
+SelectBuilder.query()
+    .select(ORDERS.ID.ref())
+    .from(ORDERS)
+    .where(
+        eqIfPresent(ORDERS.STATUS, params.get("status")),       // applied if present
+        gteIfPresent(ORDERS.AMOUNT, params.get("minAmount")),   // applied if present
+        lteIfPresent(ORDERS.AMOUNT, params.get("maxAmount")),   // applied if present
+        orIfAny(                                                 // null if both null
+            containsIfPresent(ORDERS.CATEGORY, params.get("q")),
+            containsIfPresent(ORDERS.REGION, params.get("q"))
+        )
+    )
+    .build();
+// Only non-null conditions make it into WHERE. If all null → no WHERE clause.
+```
+
+---
+
+## CASE EXPRESSIONS
+
+Static import: `import static com.enterprise.batch.sql.expression.Cases.*;`
+
+### Searched CASE
+
+```java
+CaseExpression tier = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("High")
+    .when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(100))).then("Medium")
+    .orElse("Low")
+    .as("tier");
+```
+
+### Simple CASE
+
+```java
+SimpleCaseExpression label = Cases.of(ORDERS.STATUS)
+    .when("A").then("Active")
+    .when("B").then("Blocked")
+    .orElse("Unknown")
+    .as("status_label");
+```
+
+### CASE in SELECT
+
+```java
+SelectBuilder.query()
+    .select(ORDERS.ID.ref())
+    .selectExpr(tier)
+    .from(ORDERS)
+    .build();
+```
+
+### CASE in UPDATE SET
+
+```java
+CaseExpression caseExpr = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("HIGH")
+    .orElse("LOW");
+
+UpdateBuilder.update()
+    .table(ORDERS)
+    .setCase(ORDERS.CATEGORY, caseExpr)
+    .where(eq(ORDERS.ID, 1L))
+    .build();
+```
+
+### CASE in ORDER BY
+
+```java
+CaseExpression priority = Cases.when(eq(ORDERS.STATUS, "URGENT")).then(1)
+    .when(eq(ORDERS.STATUS, "NORMAL")).then(2)
+    .orElse(3);
+
+SelectBuilder.query()
+    .select(ORDERS.ID.ref())
+    .from(ORDERS)
+    .orderByExpr(priority, SortDirection.ASC)
+    .build();
+```
+
+### CASE in MERGE
+
+```java
+MergeBuilder.merge()
+    .into(ORDERS)
+    .usingDual(new ColumnValue<>(ORDERS.ID, 1L), new ColumnValue<>(ORDERS.AMOUNT, BigDecimal.TEN))
+    .on(ORDERS.ID)
+    .whenMatchedSetCase(ORDERS.CATEGORY, caseExpr)
+    .whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT)
+    .build();
+```
+
+---
+
+## WINDOW FUNCTIONS
+
+Static import: `import static com.enterprise.batch.sql.expression.Over.*;`
+
+### Aggregate windows
+
+```java
+Over.sum(ORDERS.AMOUNT)           // SUM(o.amount) OVER (...)
+Over.sumDistinct(ORDERS.AMOUNT)   // SUM(DISTINCT o.amount) OVER (...)
+Over.count(ORDERS.ID)             // COUNT(o.id) OVER (...)
+Over.countDistinct(ORDERS.STATUS) // COUNT(DISTINCT o.status) OVER (...)
+Over.countAll()                   // COUNT(*) OVER (...)
+Over.avg(ORDERS.AMOUNT)           // AVG(o.amount) OVER (...)
+Over.avgDistinct(ORDERS.AMOUNT)   // AVG(DISTINCT o.amount) OVER (...)
+Over.min(ORDERS.AMOUNT)           // MIN(o.amount) OVER (...)
+Over.max(ORDERS.AMOUNT)           // MAX(o.amount) OVER (...)
+```
+
+### Ranking windows
+
+```java
+Over.rowNumber()    // ROW_NUMBER() OVER (...)
+Over.rank()         // RANK() OVER (...)
+Over.denseRank()    // DENSE_RANK() OVER (...)
+Over.ntile(4)       // NTILE(4) OVER (...)
+```
+
+### Value windows
+
+```java
+Over.lag(ORDERS.AMOUNT)                              // LAG(o.amount) OVER (...)
+Over.lag(ORDERS.AMOUNT, 2)                           // LAG(o.amount, 2) OVER (...)
+Over.lag(ORDERS.AMOUNT, 1, BigDecimal.ZERO)          // LAG(o.amount, 1, 0) OVER (...)
+Over.lead(ORDERS.AMOUNT)                             // LEAD(o.amount) OVER (...)
+Over.lead(ORDERS.AMOUNT, 2)                          // LEAD(o.amount, 2) OVER (...)
+Over.lead(ORDERS.AMOUNT, 1, BigDecimal.ZERO)         // LEAD(o.amount, 1, 0) OVER (...)
+Over.firstValue(ORDERS.AMOUNT)                       // FIRST_VALUE(o.amount) OVER (...)
+Over.lastValue(ORDERS.AMOUNT)                        // LAST_VALUE(o.amount) OVER (...)
+Over.ratioToReport(ORDERS.AMOUNT)                    // RATIO_TO_REPORT(o.amount) OVER (...)
+```
+
+### Window builder chain
+
+```java
+Over.sum(ORDERS.AMOUNT)
+    .partitionBy(ORDERS.CUSTOMER_ID)
+    .orderBy(ORDERS.CREATED_DATE, SortDirection.ASC)
+    .frame(Frame.ROWS_UNBOUNDED_PRECEDING)
+    .as("running_total")    // → WindowExpression (for SELECT)
+    // or .build()          // → WindowExpression without alias (for ORDER BY)
+```
+
+### Frame constants
+
+```java
+Frame.ROWS_UNBOUNDED_PRECEDING     // ROWS UNBOUNDED PRECEDING
+Frame.ROWS_BETWEEN_UNBOUNDED       // ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+Frame.RANGE_UNBOUNDED_PRECEDING    // RANGE UNBOUNDED PRECEDING
+Frame.RANGE_BETWEEN_UNBOUNDED      // RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+Frame.of("ROWS BETWEEN 2 PRECEDING AND CURRENT ROW")  // custom (validated)
+```
+
+### Window in SELECT
+
+```java
+SelectBuilder.query()
+    .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref())
+    .selectExpr(
+        Over.rowNumber()
+            .partitionBy(ORDERS.CUSTOMER_ID)
+            .orderBy(ORDERS.CREATED_DATE, SortDirection.DESC)
+            .as("rn"),
+        Over.sum(ORDERS.AMOUNT)
+            .partitionBy(ORDERS.CUSTOMER_ID)
+            .as("cust_total"),
+        Over.lag(ORDERS.AMOUNT, 1, BigDecimal.ZERO)
+            .partitionBy(ORDERS.CUSTOMER_ID)
+            .orderBy(ORDERS.CREATED_DATE, SortDirection.ASC)
+            .as("prev_amount"),
+        Over.ratioToReport(ORDERS.AMOUNT)
+            .partitionBy(ORDERS.REGION)
+            .as("pct_of_region")
+    )
+    .from(ORDERS)
+    .build();
+```
+
+### NULLS ordering in windows
+
+```java
+Over.rowNumber()
+    .orderBy(ORDERS.AMOUNT, SortDirection.DESC, NullsOrder.NULLS_LAST)
+    .as("rn")
+```
+
+### LAST_VALUE warning
+
+Oracle's default frame (`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`) makes `LAST_VALUE` return the current row. Always add an explicit frame:
+
+```java
+Over.lastValue(ORDERS.AMOUNT)
+    .partitionBy(ORDERS.CUSTOMER_ID)
+    .orderBy(ORDERS.CREATED_DATE, SortDirection.ASC)
+    .frame(Frame.ROWS_BETWEEN_UNBOUNDED)  // ← required for correct behavior
+    .as("last_amt")
+```
+
+---
+
+## UNION / SET OPERATIONS
+
+All member queries must share the same `ParameterBinder`.
+
+```java
+ParameterBinder binder = new ParameterBinder();
+
+SqlResult pending = SelectBuilder.subquery(binder)
+    .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref())
+    .from(ORDERS)
+    .where(eq(ORDERS.STATUS, "PENDING"))
+    .build();
+
+SqlResult cancelled = SelectBuilder.subquery(binder)
+    .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref())
+    .from(ORDERS)
+    .where(eq(ORDERS.STATUS, "CANCELLED"))
+    .build();
+
+SqlResult result = UnionBuilder.create(binder)
+    .unionAll(pending)
+    .unionAll(cancelled)
+    .orderByExpr("o.amount", SortDirection.DESC)
+    .build();
+```
+
+Operations: `.union()`, `.unionAll()`, `.except()`, `.intersect()`
+
+---
+
+## CTEs (WITH clause)
+
+CTEs extend `Cte` (which extends `Table`). Three modes:
+
+### Mode 1: Fixed CTE (self-contained query)
+
+Override `buildQuery(binder)`:
+
+```java
+public final class HighValueCte extends Cte {
+    public static final HighValueCte HIGH_VALUE = new HighValueCte("hv");
+    public final Column<Long> CUSTOMER_ID;
+    public final Column<BigDecimal> TOTAL_AMOUNT;
+
+    public HighValueCte(String alias) {
+        super("high_value_customers", alias);
+        CUSTOMER_ID  = column("customer_id", Long.class);
+        TOTAL_AMOUNT = column("total_amount", BigDecimal.class);
+    }
+
+    @Override
+    public SqlResult buildQuery(ParameterBinder binder) {
+        return SelectBuilder.subquery(binder)
+            .select(ORDERS.CUSTOMER_ID.ref(), ORDERS.AMOUNT.sumAs("total_amount"))
+            .from(ORDERS)
+            .where(gte(ORDERS.AMOUNT, new BigDecimal("1000")))
+            .groupBy(ORDERS.CUSTOMER_ID)
+            .build();
+    }
+
+    @Override
+    public HighValueCte as(String newAlias) { return new HighValueCte(newAlias); }
+}
+
+// Usage:
+SelectBuilder.query()
+    .with(HIGH_VALUE)                                    // ← auto-builds via buildQuery
+    .select(HIGH_VALUE.CUSTOMER_ID.ref(), HIGH_VALUE.TOTAL_AMOUNT.ref())
+    .from(HIGH_VALUE)
+    .build();
+```
+
+### Mode 2: Parameterized CTE
+
+Add custom `buildQuery(binder, args)`:
+
+```java
+public SqlResult buildQuery(ParameterBinder binder, String status) {
+    return SelectBuilder.subquery(binder)
+        .select(ORDERS.ID.ref(), ORDERS.STATUS.ref())
+        .from(ORDERS)
+        .where(eq(ORDERS.STATUS, status))
+        .build();
+}
+
+// Usage:
+SelectBuilder.subquery(binder)
+    .with(FILTERED, FILTERED.buildQuery(binder, "ACTIVE"))
+    .select(FILTERED.ID.ref())
+    .from(FILTERED)
+    .build();
+```
+
+### Mode 3: Dynamic CTE (columns only, external query)
+
+```java
+public final class OrderSummaryCte extends Cte {
+    public static final OrderSummaryCte SUMMARY = new OrderSummaryCte("os");
+    public final Column<Long> CUSTOMER_ID;
+    public final Column<Long> ORDER_COUNT;
+
+    public OrderSummaryCte(String alias) {
+        super("order_summary", alias);
+        CUSTOMER_ID = column("customer_id", Long.class);
+        ORDER_COUNT = column("order_count", Long.class);
+    }
+
+    @Override
+    public OrderSummaryCte as(String newAlias) { return new OrderSummaryCte(newAlias); }
+}
+
+// Usage with external query:
+SqlResult cteQuery = SelectBuilder.subquery(binder)
+    .select(ORDERS.CUSTOMER_ID.ref(), ORDERS.ID.countAs("order_count"))
+    .from(ORDERS)
+    .groupBy(ORDERS.CUSTOMER_ID)
+    .build();
+
+SelectBuilder.subquery(binder)
+    .with(SUMMARY, cteQuery)
+    .select(SUMMARY.CUSTOMER_ID.ref(), SUMMARY.ORDER_COUNT.ref())
+    .from(SUMMARY)
+    .build();
+```
+
+### Multiple CTEs + CTE-to-CTE dependency
+
+```java
+SelectBuilder.subquery(binder)
+    .with(HIGH_VALUE)                                   // CTE 1
+    .with(ENRICHED, enrichedQuery)                      // CTE 2 (references HIGH_VALUE)
+    .select(ENRICHED.NAME.ref(), ENRICHED.TOTAL_AMOUNT.ref())
+    .from(ENRICHED)
+    .build();
+```
+
+### CTE in JOIN
+
+```java
+SelectBuilder.subquery(binder)
+    .with(SUMMARY, summaryQuery)
+    .select(CUSTOMERS.ID.ref(), SUMMARY.ORDER_COUNT.ref())
+    .from(CUSTOMERS)
+    .join(JoinType.LEFT, SUMMARY, eqColumn(SUMMARY.CUSTOMER_ID, CUSTOMERS.ID))
+    .build();
+```
+
+### String-based CTE (no class needed)
+
+```java
+SqlResult cteQuery = SelectBuilder.subquery(binder)
+    .select(ORDERS.CUSTOMER_ID.ref())
+    .from(ORDERS)
+    .where(eq(ORDERS.STATUS, "ACTIVE"))
+    .build();
+
+SelectBuilder.subquery(binder)
+    .with("active_customers", cteQuery)
+    .select(CUSTOMERS.ID.ref())
+    .from(CUSTOMERS)
+    .joinRaw(JoinType.INNER, "active_customers", "active_customers.customer_id = c.id")
+    .build();
+```
+
+---
+
+## INSERT BUILDER
+
+Entry: `InsertBuilder.insert()` or `InsertBuilder.insert(sharedBinder)`
+
+### Single row (set API, type-safe)
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .set(ORDERS.ID, 42L)
+    .set(ORDERS.STATUS, "NEW")
+    .set(ORDERS.AMOUNT, BigDecimal.TEN)
+    .build();
+// INSERT INTO orders (id, status, amount) VALUES (:id_1, :status_2, :amount_3)
+```
+
+### Single row (columns/values API)
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .columns(ORDERS.ID, ORDERS.STATUS)
+    .values(1001L, "PENDING")
+    .build();
+```
+
+### Multi-row (Oracle INSERT ALL)
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .columns(ORDERS.ID, ORDERS.STATUS)
+    .values(1L, "A")
+    .values(2L, "B")
+    .values(3L, "C")
+    .build();
+// INSERT ALL INTO orders (id, status) VALUES (:id_1, :status_2) INTO orders ...
+// SELECT 1 FROM DUAL
+```
+
+### Nullable values
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .columns(ORDERS.ID, ORDERS.STATUS)
+    .valuesOrNull(1L, null)       // null → SQL NULL literal
+    .build();
+// values() throws NPE on null. Use valuesOrNull() for nullable columns.
+```
+
+### INSERT FROM SELECT
+
+```java
+SqlResult selectResult = SelectBuilder.query()
+    .select(ORDERS.ID.ref(), ORDERS.STATUS.ref())
+    .from(ORDERS)
+    .where(eq(ORDERS.STATUS, "PENDING"))
+    .build();
+
+InsertBuilder.insert()
+    .into(ARCHIVE)
+    .columns(ARCHIVE.ID, ARCHIVE.STATUS)
+    .insertFrom(selectResult)
+    .build();
+```
+
+### Literal values (not parameterized)
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .setLiteral(ORDERS.STATUS, "ACTIVE")
+    .setLiteral(ORDERS.CREATED_DATE, LocalDate.of(2024, 3, 15))
+    .build();
+// INSERT INTO orders (status, created_date) VALUES ('ACTIVE', DATE '2024-03-15')
+// setLiteral values stay fixed in buildTemplate() too.
+```
+
+### Mixed set + setLiteral
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .set(ORDERS.ID, 42L)                                    // parameterized
+    .setLiteral(ORDERS.STATUS, "NEW")                       // inlined literal
+    .set(ORDERS.AMOUNT, BigDecimal.TEN)                     // parameterized
+    .build();
+```
+
+### RETURNING (Oracle)
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .set(ORDERS.ID, 1L)
+    .set(ORDERS.STATUS, "NEW")
+    .returning(ORDERS.ID)
+    .build();
+// ... RETURNING id INTO :id
+```
+
+### Template for Spring Batch
+
+```java
+InsertBuilder.insert()
+    .into(ORDERS)
+    .columns(ORDERS.ID, ORDERS.AMOUNT, ORDERS.STATUS)
+    .buildTemplate();
+// INSERT INTO orders (id, amount, status) VALUES (:id, :amount, :status)
+// Empty param map. ItemSqlParameterSourceProvider fills per item at runtime.
+```
+
+---
+
+## UPDATE BUILDER
+
+Entry: `UpdateBuilder.update()` or `UpdateBuilder.update(sharedBinder)`
+
+### Basic UPDATE
+
+```java
+UpdateBuilder.update()
+    .table(ORDERS)
+    .set(ORDERS.AMOUNT, BigDecimal.valueOf(500))
+    .set(ORDERS.STATUS, "SHIPPED")
+    .where(eq(ORDERS.ID, 1001L))
+    .build();
+// UPDATE orders o SET amount = :amount_1, status = :status_2 WHERE o.id = :id_3
+```
+
+### SET variants
+
+```java
+.set(ORDERS.STATUS, "DONE")              // SET status = :status_1 (null → NPE)
+.setIfPresent(ORDERS.CATEGORY, val)      // skipped if val is null
+.setNull(ORDERS.CATEGORY)                // SET category = NULL
+.setLiteral(ORDERS.STATUS, "ARCHIVED")   // SET status = 'ARCHIVED' (inlined)
+.setSubquery(ORDERS.CATEGORY, sub)       // SET category = (SELECT ...)
+```
+
+### Arithmetic SET
+
+```java
+.setAdd(ORDERS.AMOUNT, BigDecimal.TEN)              // SET amount = amount + :amount_1
+.setSubtract(ORDERS.AMOUNT, BigDecimal.ONE)          // SET amount = amount - :amount_1
+.setMultiply(ORDERS.AMOUNT, BigDecimal.valueOf(2))   // SET amount = amount * :amount_1
+.setDivide(ORDERS.AMOUNT, BigDecimal.valueOf(2))     // SET amount = amount / :amount_1
+.setArithmetic(ORDERS.AMOUNT, ArithmeticOp.ADD, val) // general form
+.setColumnExpr(ORDERS.AMOUNT, COL_A, ArithmeticOp.MULTIPLY, COL_B) // SET amount = colA * colB
+```
+
+### CASE SET
+
+```java
+CaseExpression caseExpr = Cases.when(gt(ORDERS.AMOUNT, BigDecimal.valueOf(1000))).then("HIGH")
+    .orElse("LOW");
+
+UpdateBuilder.update()
+    .table(ORDERS)
+    .setCase(ORDERS.CATEGORY, caseExpr)
+    .where(eq(ORDERS.ID, 1L))
+    .build();
+```
+
+### WHERE safety
+
+```java
+.build()              // REQUIRES at least one WHERE condition (throws otherwise)
+.buildUnconditional() // explicit opt-in for full-table UPDATE
+```
+
+### RETURNING (Oracle)
+
+```java
+.returning(ORDERS.ID, ORDERS.STATUS)
+// ... RETURNING id, status INTO :id, :status
+```
+
+### Template for Spring Batch
+
+```java
+UpdateBuilder.update()
+    .table(ORDERS)
+    .set(ORDERS.AMOUNT, BigDecimal.ONE)
+    .set(ORDERS.STATUS, "X")
+    .buildTemplate();
+// UPDATE orders o SET amount = :amount, status = :status
+// No WHERE in template. Empty param map.
+```
+
+---
+
+## DELETE BUILDER
+
+Entry: `DeleteBuilder.delete()` or `DeleteBuilder.delete(sharedBinder)`
+
+```java
+DeleteBuilder.delete()
+    .from(ORDERS)
+    .where(eq(ORDERS.STATUS, "CANCELLED"))
+    .build();
+// DELETE FROM orders o WHERE o.status = :status_1
+```
+
+### Composite condition
+
+```java
+DeleteBuilder.delete()
+    .from(ORDERS)
+    .where(or(
+        eq(ORDERS.STATUS, "CANCELLED"),
+        eq(ORDERS.STATUS, "EXPIRED")))
+    .build();
+```
+
+### WHERE safety + RETURNING
+
+```java
+.build()              // REQUIRES WHERE (throws otherwise)
+.buildUnconditional() // explicit opt-in for full-table DELETE
+.returning(ORDERS.ID) // Oracle RETURNING INTO
+```
+
+---
+
+## MERGE BUILDER (Oracle)
+
+Entry: `MergeBuilder.merge()` or `MergeBuilder.merge(sharedBinder)`
+
+### MERGE from DUAL (single-row upsert)
+
+```java
+MergeBuilder.merge()
+    .into(ORDERS)
+    .usingDual(
+        new ColumnValue<>(ORDERS.ID, 1001L),
+        new ColumnValue<>(ORDERS.AMOUNT, BigDecimal.TEN))
+    .on(ORDERS.ID)
+    .whenMatchedUpdate(ORDERS.AMOUNT)
+    .whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT)
+    .build();
+```
+
+### MERGE from subquery
+
+```java
+SqlResult staged = SelectBuilder.query()
+    .select(CUSTOMERS.ID.ref(), CUSTOMERS.NAME.ref())
+    .from(CUSTOMERS)
+    .where(eq(CUSTOMERS.TIER, "GOLD"))
+    .build();
+
+MergeBuilder.merge()
+    .into(ORDERS)
+    .usingSubquery(staged, "stg")
+    .on(ORDERS.ID)
+    .whenMatchedUpdate(ORDERS.STATUS)
+    .whenNotMatchedInsert(ORDERS.ID, ORDERS.STATUS)
+    .build();
+```
+
+### Multi-column key
+
+```java
+.on(ORDERS.ID, ORDERS.CUSTOMER_ID)
+// ON (o.id = src.id AND o.customer_id = src.customer_id)
+```
+
+### WHEN MATCHED variants
+
+```java
+.whenMatchedUpdate(ORDERS.AMOUNT, ORDERS.STATUS)  // SET from source columns
+.whenMatchedSet(ORDERS.STATUS, "DONE")             // SET to literal
+.whenMatchedSetAdd(ORDERS.AMOUNT, BigDecimal.valueOf(100))
+.whenMatchedSetSubtract(ORDERS.AMOUNT, val)
+.whenMatchedSetMultiply(ORDERS.AMOUNT, val)
+.whenMatchedSetDivide(ORDERS.AMOUNT, val)
+.whenMatchedSetCase(ORDERS.CATEGORY, caseExpr)
+.whenMatchedDelete()                               // WHEN MATCHED THEN DELETE
+```
+
+### WHEN NOT MATCHED
+
+```java
+.whenNotMatchedInsert(ORDERS.ID, ORDERS.AMOUNT, ORDERS.STATUS)
+// WHEN NOT MATCHED THEN INSERT (id, amount, status) VALUES (src.id, src.amount, src.status)
+```
+
+---
+
+## SQL RESULT
+
+All builders produce `SqlResult`:
+
+```java
+SqlResult result = builder.build();
+
+result.sql();              // SQL with :named_N placeholders
+result.namedParameters();  // Map<String, Object>
+result.toPositional();     // PositionalQuery with ? placeholders + Object[] values
+result.toDebugString();    // SQL with values inlined (for logging, never execute)
+result.verify();           // asserts every :param in SQL has a matching entry
+```
+
+### PositionalQuery (for JDBC)
+
+```java
+SqlResult.PositionalQuery pq = result.toPositional();
+pq.sql();      // "SELECT ... WHERE o.status = ?"
+pq.values();   // Object[] {"PENDING"}
+```
+
+---
+
+## SPRING BATCH INTEGRATION
+
+Package: `com.enterprise.batch.shared.querybridge`
+
+### Ports (pure Java, no Spring)
+
+```java
+// Query provider (SELECT)
+@FunctionalInterface
+public interface BatchQueryProvider {
+    SqlResult buildQuery(Map<String, Object> jobParams);
+}
+
+// DML provider (INSERT/UPDATE/DELETE/MERGE)
+@FunctionalInterface
+public interface BatchDmlProvider {
+    SqlResult buildDml(Map<String, Object> jobParams);
+}
+```
+
+### Defining providers
+
+```java
+public static BatchQueryProvider pendingOrders() {
+    return params -> SelectBuilder.query()
+        .select(ORDERS.ID.ref(), ORDERS.AMOUNT.ref())
+        .from(ORDERS)
+        .where(eqIfPresent(ORDERS.STATUS, (String) params.get("status")))
+        .build();
+}
+
+public static BatchDmlProvider insertSummary() {
+    return params -> InsertBuilder.insert()
+        .into(SUMMARIES)
+        .columns(SUMMARIES.ORDER_ID, SUMMARIES.CUSTOMER_NAME, SUMMARIES.AMOUNT)
+        .buildTemplate();
+}
+```
+
+### Adapters (Spring Batch bridge)
+
+**BatchReaderFactory** — creates `JdbcCursorItemReader<T>`:
+```java
+@Bean @StepScope
+JdbcCursorItemReader<OrderDto> orderReader(BatchReaderFactory factory) {
+    return factory.cursorReader(
+        "orderReader",
+        pendingOrders(),
+        (rs, rowNum) -> new OrderDto(rs.getLong("id"), rs.getBigDecimal("amount"), ...),
+        Map.of("status", "PENDING")
+    );
+}
+```
+
+Internally: calls `provider.buildQuery()` → `verify()` → `toPositional()` → configures cursor reader.
+
+**BatchWriterFactory** — creates `JdbcBatchItemWriter<T>`:
+```java
+@Bean
+JdbcBatchItemWriter<EnrichedOrderDto> summaryWriter(BatchWriterFactory factory) {
+    return factory.templateWriter(
+        "summaryWriter",
+        insertSummary(),
+        item -> new MapSqlParameterSource()
+            .addValue("order_id", item.orderId())
+            .addValue("customer_name", item.customerName())
+            .addValue("amount", item.amount()),
+        Map.of()
+    );
+}
+```
+
+`templateWriter()` — for `buildTemplate()` DML (empty param map, per-item filling).
+`batchWriter()` — for regular DML with pre-filled params.
+
+### Registries (named lookup for multi-reader/writer jobs)
+
+```java
+@Autowired
+void configure(QueryProviderRegistry qr, DmlProviderRegistry dr) {
+    qr.register("pendingOrders", pendingOrders());
+    qr.register("highValueCustomers", highValueCustomers());
+    dr.register("insertSummary", insertSummary());
+}
+
+// Later:
+factory.cursorReader("reader", registry.get("pendingOrders"), mapper, params);
+```
+
+### Config
+
+`@Import(SpringBatchQueryConfig.class)` provides: `BatchReaderFactory`, `BatchWriterFactory`, `QueryProviderRegistry`, `DmlProviderRegistry` as beans.
+
+---
+
+## DESIGN RULES
+
+### 1. Null semantics
+
+- Strict (`eq`, `gt`, ...) → NPE on null. Use when value must be present.
+- Optional (`eqIfPresent`, ...) → null return. Use for search filters.
+- `where()` filters nulls silently. Result: dynamic WHERE based on which values are present.
+
+### 2. Table aliasing
+
+`Table.as(newAlias)` creates NEW instance. Columns MUST be defined in constructor (not inline fields) for rebinding to work.
+
+### 3. Shared binder for subqueries
+
+`SelectBuilder.query()` — isolated binder.
+`SelectBuilder.subquery(binder)` — shared binder. Required for CTEs, UNIONs, correlated subqueries to keep parameter names unique (`:hint_N`).
+
+### 4. Thread safety
+
+Providers MUST create fresh builders per call. Never reuse builder instances.
+```java
+// CORRECT
+return params -> SelectBuilder.query().select(...).from(...).build();
+
+// WRONG — shared mutable state
+SelectBuilder shared = SelectBuilder.query();
+return params -> shared.select(...).build();
+```
+
+### 5. SET unqualified, WHERE qualified
+
+- `set()` uses `column.name()` → `amount`
+- `where()` uses `column.ref()` via `Condition.toSql()` → `o.amount`
+- Result: `UPDATE orders o SET amount = :v WHERE o.status = :v`
+
+### 6. WHERE safety
+
+`UpdateBuilder.build()` / `DeleteBuilder.build()` throw if no WHERE conditions.
+Use `buildUnconditional()` to explicitly opt into full-table operations.
+
+### 7. buildTemplate() for batch writes
+
+Produces `:column_name` (no `_N` suffix), empty param map. Spring Batch's `ItemSqlParameterSourceProvider` fills values per item.
+
+### 8. Generic bounds
+
+Comparison methods use `Comparable<? super V>` to support types like `LocalDate` (implements `Comparable<ChronoLocalDate>`).
+
+### 9. SQL injection protection
+
+`ExpressionValidator` checks all raw strings. Blocks: DML keywords (`DROP`, `DELETE`, `INSERT`, `UPDATE`, `ALTER`, `CREATE`, `TRUNCATE`, `EXEC`), comments (`--`, `/*`), semicolons. Values always parameterized.
+
+### 10. Dialect abstraction
+
+`Dialects.ORACLE` = `Dialects.ANSI` (Oracle 12c+ uses ANSI FETCH FIRST). Custom dialects: implement `SqlDialect` interface (`limit()`, `offset()`, `limitOffset()`).
+
+---
+
+## ENUMS
+
+| Enum | Values |
+|------|--------|
+| `ComparisonOp` | `EQ`, `NEQ`, `GT`, `GTE`, `LT`, `LTE` |
+| `ArithmeticOp` | `ADD`, `SUBTRACT`, `MULTIPLY`, `DIVIDE` |
+| `JoinType` | `INNER`, `LEFT`, `RIGHT`, `FULL`, `CROSS` |
+| `SortDirection` | `ASC`, `DESC` |
+| `NullsOrder` | `NULLS_FIRST`, `NULLS_LAST` |
+
+---
+
+## COMPLETE EXAMPLE: Batch job with analytics
+
+```java
+// --- Domain ---
+public final class OrderTable extends Table {
+    public static final OrderTable ORDERS = new OrderTable("o");
+    public final Column<Long> ID;
+    public final Column<BigDecimal> AMOUNT;
+    public final Column<String> STATUS;
+    public final Column<Long> CUSTOMER_ID;
+    public final Column<LocalDate> CREATED_DATE;
+
+    public OrderTable(String alias) {
+        super("orders", alias);
+        ID           = column("id", Long.class);
+        AMOUNT       = column("amount", BigDecimal.class);
+        STATUS       = column("status", String.class);
+        CUSTOMER_ID  = column("customer_id", Long.class);
+        CREATED_DATE = column("created_date", LocalDate.class);
+    }
+    @Override public OrderTable as(String a) { return new OrderTable(a); }
+}
+
+// --- Application: query provider ---
+public static BatchQueryProvider orderAnalytics() {
+    return params -> SelectBuilder.query()
+        .select(ORDERS.ID.refAs("order_id"), ORDERS.AMOUNT.ref(),
+                ORDERS.CUSTOMER_ID.ref(), ORDERS.CREATED_DATE.ref())
+        .selectExpr(
+            Over.rowNumber()
+                .partitionBy(ORDERS.CUSTOMER_ID)
+                .orderBy(ORDERS.CREATED_DATE, SortDirection.ASC)
+                .as("customer_order_seq"),
+            Over.sum(ORDERS.AMOUNT)
+                .partitionBy(ORDERS.CUSTOMER_ID)
+                .orderBy(ORDERS.CREATED_DATE, SortDirection.ASC)
+                .frame(Frame.ROWS_UNBOUNDED_PRECEDING)
+                .as("running_total"),
+            Over.denseRank()
+                .orderBy(ORDERS.AMOUNT, SortDirection.DESC)
+                .as("amount_rank"),
+            Over.ntile(4)
+                .orderBy(ORDERS.AMOUNT, SortDirection.DESC)
+                .as("quartile")
+        )
+        .from(ORDERS)
+        .where(neq(ORDERS.STATUS, "CANCELLED"))
+        .build();
+}
+
+// --- Application: DML provider ---
+public static BatchDmlProvider insertAnalytics() {
+    return params -> InsertBuilder.insert()
+        .into(ANALYTICS)
+        .columns(ANALYTICS.ORDER_ID, ANALYTICS.AMOUNT,
+                 ANALYTICS.ORDER_SEQ, ANALYTICS.RUNNING_TOTAL,
+                 ANALYTICS.AMOUNT_RANK, ANALYTICS.QUARTILE)
+        .buildTemplate();
+}
+
+// --- Infrastructure: Spring Batch job config ---
+@Configuration
+@Import(SpringBatchQueryConfig.class)
+public class AnalyticsJobConfig {
+
+    @Bean @StepScope
+    JdbcCursorItemReader<OrderWindowDto> analyticsReader(BatchReaderFactory factory) {
+        return factory.cursorReader("analyticsReader", orderAnalytics(),
+            (rs, n) -> new OrderWindowDto(
+                rs.getLong("order_id"),
+                rs.getBigDecimal("amount"),
+                rs.getLong("customer_id"),
+                rs.getObject("created_date", LocalDate.class),
+                rs.getInt("customer_order_seq"),
+                rs.getBigDecimal("running_total"),
+                rs.getInt("amount_rank"),
+                rs.getInt("quartile")),
+            Map.of());
+    }
+
+    @Bean
+    JdbcBatchItemWriter<AnalyzedOrderDto> analyticsWriter(BatchWriterFactory factory) {
+        return factory.templateWriter("analyticsWriter", insertAnalytics(),
+            item -> new MapSqlParameterSource()
+                .addValue("order_id", item.orderId())
+                .addValue("amount", item.amount())
+                .addValue("order_seq", item.orderSeq())
+                .addValue("running_total", item.runningTotal())
+                .addValue("amount_rank", item.amountRank())
+                .addValue("quartile", item.quartile()),
+            Map.of());
+    }
+
+    @Bean
+    Step analyticsStep(JobRepository repo, PlatformTransactionManager tx) {
+        return new StepBuilder("analyticsStep", repo)
+            .<OrderWindowDto, AnalyzedOrderDto>chunk(100, tx)
+            .reader(analyticsReader(null))
+            .processor(item -> analyze(item))
+            .writer(analyticsWriter(null))
+            .build();
+    }
+
+    @Bean
+    Job analyticsJob(JobRepository repo) {
+        return new JobBuilder("analyticsJob", repo)
+            .start(analyticsStep(null, null))
+            .build();
+    }
+}
+```
